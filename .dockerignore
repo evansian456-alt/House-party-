@@ -1,0 +1,115 @@
+# Git
+.git
+.gitignore
+.github
+
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.test
+
+# Testing
+coverage
+test-results
+playwright-report
+.playwright
+
+# Documentation (not needed in container)
+*.md
+!README.md
+docs
+ARCHITECTURE_*.md
+ACTION_PLAN.md
+ANDROID_*.md
+AUDIT_*.md
+CLEANUP_*.md
+CODEBASE_*.md
+COMPREHENSIVE_*.md
+CONTRIBUTING.md
+DEPLOYMENT_*.md
+E2E_*.md
+EMOJI_*.md
+EVENT_*.md
+FAQ.md
+FINAL_*.md
+GUEST_*.md
+IMPLEMENTATION_*.md
+IMPROVEMENT_*.md
+LEADERBOARD_*.md
+MISSING_*.md
+MUSIC_*.md
+NEW_*.md
+NEXT_*.md
+PAYMENT_*.md
+PRODUCTION_*.md
+PR_*.md
+PWA_*.md
+QUICK_*.md
+RAILWAY_*.md
+README_*.md
+ROADMAP_*.md
+SECURITY_*.md
+SONG_*.md
+START_*.md
+SYNCSPEAKER_*.md
+SYNC_*.md
+TASK_*.md
+TECHNICAL_*.md
+VERIFICATION_*.md
+VISUAL_*.md
+WHY_*.md
+
+# Scripts
+check-all-prs.sh
+resolve-pr-conflicts.sh
+run-e2e-tests.sh
+
+# E2E tests (not needed in production)
+e2e-tests
+e2e-workflow
+playwright.config.js
+generate-e2e-report.js
+
+# Test files
+*.test.js
+*.spec.js
+jest.setup.js
+test-crash-fix.js
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist
+build
+*.log
+
+# Temporary files
+tmp
+temp
+.tmp
+
+# Database (should use external database)
+db/setup-databases.sh
+
+# Admin tools (not needed in container)
+admin-dashboard.html
+sync-dashboard.html
+validate-pwa.js

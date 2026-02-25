@@ -1,0 +1,72 @@
+{
+  "name": "phone-party",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:e2e": "node ./scripts/e2e-runner.js",
+    "test:e2e:headed": "node ./scripts/e2e-runner.js --headed",
+    "test:e2e:ui": "node ./scripts/e2e-runner.js --ui",
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:generate-report": "node generate-e2e-report.js",
+    "test:e2e:auto": "node e2e-workflow/cli.js",
+    "test:e2e:workflow": "node e2e-workflow/cli.js",
+    "db:migrate": "node ./scripts/db-migrate.js",
+    "validate:pwa": "node validate-pwa.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.993.0",
+    "@aws-sdk/lib-storage": "^3.993.0",
+    "@aws-sdk/s3-request-presigner": "^3.993.0",
+    "@sentry/node": "^10.38.0",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "express": "^4.19.2",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.9.2",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.0.2",
+    "nanoid": "^3.3.11",
+    "pg": "^8.18.0",
+    "ws": "^8.17.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.1",
+    "@types/jest": "^30.0.0",
+    "ioredis-mock": "^8.13.1",
+    "jest": "^30.2.0",
+    "lighthouse": "^13.0.2",
+    "playwright": "^1.58.1",
+    "supertest": "^7.2.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "server.js"
+    ],
+    "testMatch": [
+      "**/__tests__/**/*.js",
+      "**/?(*.)+(spec|test).js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/e2e-tests/"
+    ],
+    "transform": {},
+    "transformIgnorePatterns": [
+      "node_modules/(?!(nanoid)/)"
+    ],
+    "setupFilesAfterEnv": [
+      "./jest.setup.js"
+    ],
+    "maxWorkers": 2,
+    "forceExit": true
+  }
+}

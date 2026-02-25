@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - Phone Party</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .admin-container {
+      max-width: 1400px;
+      margin: 2rem auto;
+      padding: 0 2rem;
+    }
+
+    .admin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid rgba(157, 78, 221, 0.3);
+    }
+
+    .admin-title {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+      text-shadow: var(--glow-brand-sm);
+    }
+
+    .admin-refresh-btn {
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(135deg, var(--neon-purple), var(--hot-pink));
+      border: none;
+      border-radius: var(--radius);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .admin-refresh-btn:hover {
+      box-shadow: var(--glow-pink);
+      transform: translateY(-2px);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .metric-card {
+      background: rgba(20, 20, 35, 0.8);
+      border: 1px solid rgba(157, 78, 221, 0.3);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .metric-label {
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--text);
+      text-shadow: var(--glow-brand-sm);
+    }
+
+    .metric-unit {
+      font-size: 18px;
+      color: var(--muted);
+      margin-left: 0.5rem;
+    }
+
+    .section-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 2rem 0 1rem 0;
+      text-shadow: var(--glow-brand-sm);
+    }
+
+    .table-container {
+      background: rgba(20, 20, 35, 0.8);
+      border: 1px solid rgba(157, 78, 221, 0.3);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      overflow-x: auto;
+    }
+
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .admin-table th {
+      text-align: left;
+      padding: 1rem;
+      border-bottom: 2px solid rgba(157, 78, 221, 0.3);
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .admin-table td {
+      padding: 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text);
+    }
+
+    .admin-table tr:hover {
+      background: rgba(157, 78, 221, 0.1);
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-active {
+      background: rgba(0, 255, 0, 0.2);
+      color: #00ff00;
+      border: 1px solid rgba(0, 255, 0, 0.4);
+    }
+
+    .status-ended {
+      background: rgba(255, 0, 0, 0.2);
+      color: #ff4444;
+      border: 1px solid rgba(255, 0, 0, 0.4);
+    }
+
+    .error-message {
+      background: rgba(255, 0, 0, 0.1);
+      border: 1px solid rgba(255, 0, 0, 0.4);
+      color: #ff4444;
+      padding: 1rem;
+      border-radius: var(--radius);
+      text-align: center;
+      margin: 2rem 0;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: var(--muted);
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <div class="admin-header">
+      <h1 class="admin-title">📊 Admin Dashboard</h1>
+      <button class="admin-refresh-btn" onclick="loadMetrics()">🔄 Refresh</button>
+    </div>
+
+    <div id="loadingState" class="loading">Loading metrics...</div>
+    <div id="errorState" class="error-message hidden"></div>
+    <div id="metricsContent" class="hidden">
+      <!-- Key Metrics -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-label">Active Sessions</div>
+          <div class="metric-value" id="metricActiveSessions">0</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Total Sessions Created</div>
+          <div class="metric-value" id="metricTotalSessions">0</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Active Users (7d)</div>
+          <div class="metric-value" id="metricActiveUsers">0</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Monthly Recurring Revenue</div>
+          <div class="metric-value">£<span id="metricMRR">0.00</span></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Average Revenue Per User</div>
+          <div class="metric-value">£<span id="metricARPU">0.00</span></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Total Revenue</div>
+          <div class="metric-value">£<span id="metricTotalRevenue">0.00</span></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Avg Session Duration</div>
+          <div class="metric-value" id="metricAvgDuration">0<span class="metric-unit">min</span></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-label">Avg Participants</div>
+          <div class="metric-value" id="metricAvgParticipants">0.0</div>
+        </div>
+      </div>
+
+      <!-- Session Details -->
+      <h2 class="section-title">Recent Sessions</h2>
+      <div class="table-container">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Session ID</th>
+              <th>Created</th>
+              <th>Duration</th>
+              <th>Participants</th>
+              <th>Tier</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="sessionsTableBody">
+            <tr>
+              <td colspan="6" style="text-align: center; color: var(--muted);">No session data available</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Get admin secret from prompt (for security, don't use URL)
+    const adminSecret = prompt('Enter admin secret:');
+
+    if (!adminSecret) {
+      document.getElementById('loadingState').classList.add('hidden');
+      document.getElementById('errorState').textContent = 'Admin secret required';
+      document.getElementById('errorState').classList.remove('hidden');
+    } else {
+      loadMetrics();
+    }
+
+    async function loadMetrics() {
+      const loadingState = document.getElementById('loadingState');
+      const errorState = document.getElementById('errorState');
+      const metricsContent = document.getElementById('metricsContent');
+
+      // Show loading
+      loadingState.classList.remove('hidden');
+      errorState.classList.add('hidden');
+      metricsContent.classList.add('hidden');
+
+      try {
+        // Use header for admin secret (more secure than query parameter)
+        const response = await fetch('/admin/metrics', {
+          headers: {
+            'X-Admin-Secret': adminSecret,
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        displayMetrics(data);
+
+        // Hide loading, show content
+        loadingState.classList.add('hidden');
+        metricsContent.classList.remove('hidden');
+      } catch (error) {
+        console.error('Failed to load metrics:', error);
+        loadingState.classList.add('hidden');
+        errorState.textContent = `Error: ${error.message}`;
+        errorState.classList.remove('hidden');
+      }
+    }
+
+    function displayMetrics(data) {
+      const metrics = data.metrics;
+
+      // Update metric cards
+      document.getElementById('metricActiveSessions').textContent = metrics.sessions.active || 0;
+      document.getElementById('metricTotalSessions').textContent = metrics.sessions.created || 0;
+      document.getElementById('metricActiveUsers').textContent = metrics.users.active || 0;
+      document.getElementById('metricMRR').textContent = (metrics.revenue.mrr || 0).toFixed(2);
+      document.getElementById('metricARPU').textContent = (metrics.revenue.arpu || 0).toFixed(2);
+      document.getElementById('metricTotalRevenue').textContent = (metrics.revenue.total || 0).toFixed(2);
+      
+      // Convert duration from ms to minutes
+      const avgDurationMin = Math.round((metrics.sessions.avgDurationMs || 0) / 60000);
+      document.getElementById('metricAvgDuration').textContent = avgDurationMin;
+      
+      document.getElementById('metricAvgParticipants').textContent = (metrics.sessions.avgParticipants || 0).toFixed(1);
+    }
+
+    // Auto-refresh every 30 seconds
+    setInterval(loadMetrics, 30000);
+  </script>
+</body>
+</html>

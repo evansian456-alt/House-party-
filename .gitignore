@@ -1,0 +1,16 @@
+node_modules/
+coverage/
+*.log
+.DS_Store
+.env
+uploads/
+uploads-temp/
+test-results/
+playwright-report/
+e2e-tests/screenshots/
+e2e-tests/videos/
+e2e-tests/logs/
+e2e-tests/reports/
+test-reports/
+server.log
+test-storage-tmp/

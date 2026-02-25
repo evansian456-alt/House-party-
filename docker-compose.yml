@@ -1,0 +1,112 @@
+# Docker Compose - Local Development Environment
+# Provides PostgreSQL, Redis, and Phone Party app for local testing
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # PostgreSQL Database
+  # ============================================================================
+  postgres:
+    image: postgres:14-alpine
+    container_name: phoneparty-postgres
+    environment:
+      POSTGRES_DB: phoneparty
+      POSTGRES_USER: phoneparty
+      POSTGRES_PASSWORD: phoneparty_dev_password  # Change for production!
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./db/migrations:/docker-entrypoint-initdb.d/migrations
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phoneparty"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - phoneparty-network
+
+  # ============================================================================
+  # Redis Cache & Pub/Sub
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: phoneparty-redis
+    command: redis-server --appendonly yes --requirepass phoneparty_dev_password  # Change for production!
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - phoneparty-network
+
+  # ============================================================================
+  # Phone Party Application
+  # ============================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: phoneparty-app
+    environment:
+      # Server Configuration
+      NODE_ENV: development
+      PORT: 8080
+      
+      # Database Connection
+      DATABASE_URL: postgresql://phoneparty:phoneparty_dev_password@postgres:5432/phoneparty
+      
+      # Redis Connection
+      REDIS_URL: redis://:phoneparty_dev_password@redis:6379
+      
+      # Security (DEVELOPMENT ONLY - Generate secure secret for production!)
+      JWT_SECRET: dev-secret-not-for-production-use-openssl-rand-base64-48
+      
+      # Feature Flags
+      DEBUG: "false"
+      TEST_MODE: "false"
+      ENABLE_PUBSUB: "true"
+      ENABLE_REACTION_HISTORY: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      # Mount code for development (comment out for production-like testing)
+      - .:/app
+      - /app/node_modules  # Prevent overwriting node_modules
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    networks:
+      - phoneparty-network
+    restart: unless-stopped
+
+# ============================================================================
+# Named Volumes
+# ============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# ============================================================================
+# Network
+# ============================================================================
+networks:
+  phoneparty-network:
+    driver: bridge

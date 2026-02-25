@@ -1,0 +1,2483 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
+  <meta name="description" content="Turn your phones into synchronized party speakers with real-time audio sync. Create or join parties, sync music across devices, and feel the energy together." />
+  
+  <!-- PWA Meta Tags -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="Phone Party" />
+  
+  <title>PHONE PARTY — Turn Phones Into One Big Speaker</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#6366f1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Phone Party" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.svg" />
+  <link rel="icon" type="image/svg+xml" href="/icons/icon-192x192.svg" />
+  
+  <!-- Sentry DSN (set via server) -->
+  <meta name="sentry-dsn" content="" />
+  
+  <!-- Google Analytics Measurement ID (set via server) -->
+  <meta name="ga-measurement-id" content="" />
+  
+  <!-- Google Analytics 4 (Production Only) -->
+  <script>
+    // Only load Google Analytics in production
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      const gaMeasurementId = document.querySelector('meta[name="ga-measurement-id"]')?.content;
+      if (gaMeasurementId) {
+        // Load Google Analytics
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = `https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`;
+        document.head.appendChild(script);
+        
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', gaMeasurementId);
+        console.log('[Analytics] Google Analytics initialized');
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo">📱🎉</div>
+      <div>
+        <div class="title">PHONE PARTY</div>
+        <div class="subtitle">Turn phones into one big speaker.</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <span id="connectionIndicator">● Connected</span>
+      <button class="btn-parent-info" id="btnParentInfo" title="Help & About">ℹ️</button>
+      <button class="btn-leaderboard" id="btnLeaderboard" title="Leaderboard">🏆</button>
+      <button class="btn-profile" id="btnProfile" title="My Profile">👤</button>
+      <button class="btn-upgrade" id="btnUpgradeHub" title="Upgrade" aria-label="Upgrade options">⭐</button>
+      <button class="btn-account" id="btnAccount" title="Account">🔑</button>
+      <div class="pill" id="planPill">Free · 2 phones</div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Landing Page - PHONE PARTY Design -->
+    <section class="landing-page" id="viewLanding">
+      <div class="landing-hero-new">
+        <h1 class="landing-title-new">PHONE PARTY 🎉</h1>
+        <p class="landing-subtitle-new">Turn Phones Into One Big Speaker</p>
+        
+        <!-- Animated Background Element -->
+        <div class="party-background-animation">
+          <div class="sound-wave"></div>
+          <div class="sound-wave"></div>
+          <div class="sound-wave"></div>
+        </div>
+        
+        <!-- App Information Section -->
+        <div class="landing-info-section">
+          <div class="info-card">
+            <div class="info-icon">📱</div>
+            <h3 class="info-title">Multiple Phones = Massive Sound</h3>
+            <p class="info-desc">Connect your crew's phones and create the ultimate party speaker system.</p>
+          </div>
+          <div class="info-card">
+            <div class="info-icon">🎧</div>
+            <h3 class="info-title">DJ Controls the Vibe</h3>
+            <p class="info-desc">One person plays the music, everyone hears it perfectly in sync.</p>
+          </div>
+          <div class="info-card">
+            <div class="info-icon">🔥</div>
+            <h3 class="info-title">Party Mode Activated</h3>
+            <p class="info-desc">Perfect for hangouts, parties, and turning up anywhere!</p>
+          </div>
+        </div>
+        
+        <!-- Main CTA Buttons -->
+        <div class="landing-cta-buttons">
+          <button class="btn-landing-primary" id="btnSeePricing">
+            🎯 PICK YOUR VIBE
+          </button>
+          <button class="btn-landing-addons" id="btnLandingAddons">
+            ✨ ADD-ONS (BOOST YOUR PARTY)
+          </button>
+        </div>
+      </div>
+      <div class="blob blob-3"></div>
+    </section>
+
+    <!-- PHONE PARTY Pricing Screen -->
+    <section class="card hidden" id="viewChooseTier">
+      <h1>🎉 CHOOSE YOUR PARTY LEVEL</h1>
+      <p class="muted">Pick the plan that fits your vibe</p>
+      
+      <div class="tier-selection-grid">
+        <!-- FREE MODE -->
+        <div class="tier-card neon-card" id="tierFree">
+          <div class="tier-icon">🆓</div>
+          <div class="tier-badge free">FREE</div>
+          <h2>FREE MODE</h2>
+          <p class="tier-subtitle">UP TO 2 PHONES</p>
+          <ul class="tier-features">
+            <li>✓ Up to 2 phones</li>
+            <li>✓ Unlimited time</li>
+            <li>✓ Audio sync</li>
+            <li>✗ No messaging</li>
+            <li>✗ No reactions</li>
+          </ul>
+          <button class="btn-tier primary" id="btnSelectFree">START FREE 🎵</button>
+        </div>
+
+        <!-- PARTY PASS -->
+        <div class="tier-card neon-card tier-featured" id="tierPartyPass">
+          <div class="popular-badge">🔥 MOST POPULAR</div>
+          <div class="tier-icon">🎊</div>
+          <div class="tier-badge party-pass">PARTY PASS</div>
+          <h2>PARTY PASS</h2>
+          <p class="tier-price">£3.99</p> <!-- GBP - Party Pass pricing -->
+          <p class="tier-subtitle">UP TO 4 PHONES · 2 HOURS</p>
+          <ul class="tier-features">
+            <li>✓ Up to 4 phones</li>
+            <li>✓ 2 hours duration</li>
+            <li>✓ Chat + emoji reactions</li>
+            <li>✓ Guest quick replies</li>
+            <li>✓ DJ quick message buttons</li>
+            <li>✓ Auto party prompts</li>
+          </ul>
+          <button class="btn-tier party-pass" id="btnSelectPartyPass">GET PARTY PASS 🎉</button>
+        </div>
+
+        <!-- PRO MODE -->
+        <div class="tier-card neon-card" id="tierPro">
+          <div class="tier-icon">⭐</div>
+          <div class="tier-badge pro">PRO</div>
+          <h2>PRO MONTHLY</h2>
+          <p class="tier-price">£9.99/mo</p> <!-- GBP - Pro Monthly pricing -->
+          <p class="tier-subtitle">UP TO 10 PHONES</p>
+          <ul class="tier-features">
+            <li>✓ Up to 10 phones</li>
+            <li>✓ Unlimited time</li>
+            <li>✓ Custom messages</li>
+            <li>✓ All reactions</li>
+            <li>✓ No ads</li>
+            <li>✓ Priority support</li>
+            <li>✓ Advanced analytics</li>
+          </ul>
+          <button class="btn-tier pro" id="btnSelectPro">GO PRO 🚀</button>
+        </div>
+      </div>
+
+      <button class="btn secondary" id="btnBackToLanding" style="margin-top: 2rem;">← Back to Home</button>
+    </section>
+
+    <!-- Account Creation / Profile Creation -->
+    <section class="card hidden" id="viewAccountCreation">
+      <h1>🎤 CREATE YOUR DJ PROFILE</h1>
+      <p class="muted">Set up your party identity</p>
+      
+      <!-- Selected Tier Display -->
+      <div class="selected-tier-info" id="selectedTierInfo">
+        <div class="selected-tier-badge"></div>
+        <div class="selected-tier-details"></div>
+      </div>
+      
+      <div class="account-options">
+        <!-- Profile Creation Section -->
+        <div class="account-section">
+          <h2>Your DJ Profile</h2>
+          <div class="form-group">
+            <label class="lbl">DJ Name (required) ⭐</label>
+            <input type="text" id="accountDjName" class="input" placeholder="DJ CoolVibes" required />
+          </div>
+          <div class="form-group">
+            <label class="lbl">Email</label>
+            <input type="email" id="accountEmail" class="input" placeholder="your@email.com" />
+          </div>
+          <div class="form-group">
+            <label class="lbl">Password</label>
+            <input type="password" id="accountPassword" class="input" placeholder="••••••••" />
+          </div>
+          <div class="form-group">
+            <label class="lbl">Favorite Color 🎨</label>
+            <div class="color-picker-grid">
+              <div class="color-option" style="background: #9D4EDD;" data-color="purple"></div>
+              <div class="color-option" style="background: #00D4FF;" data-color="blue"></div>
+              <div class="color-option" style="background: #FF2D95;" data-color="pink"></div>
+              <div class="color-option" style="background: #39FF14;" data-color="green"></div>
+              <div class="color-option" style="background: #FFD700;" data-color="gold"></div>
+              <div class="color-option" style="background: #FF6B35;" data-color="orange"></div>
+            </div>
+            <input type="hidden" id="favoriteColor" value="purple" />
+          </div>
+          <button class="btn primary" id="btnCreateAccountSubmit">Save Profile & Continue 🚀</button>
+        </div>
+        
+        <div class="account-divider">
+          <span>OR</span>
+        </div>
+        
+        <!-- Login Section -->
+        <div class="account-section">
+          <h2>Already Have A Profile?</h2>
+          <button class="btn secondary" id="btnShowLogin">Log In Instead</button>
+        </div>
+      </div>
+      
+      <!-- Prototype Mode Skip Option -->
+      <div class="prototype-mode-section">
+        <div class="line" style="margin: 2rem 0;"></div>
+        <h3>🔧 Testing Mode</h3>
+        <p class="muted">Skip profile creation and use prototype mode</p>
+        <button class="btn secondary" id="btnSkipAccount">Skip Sign Up (Prototype Mode)</button>
+        <div class="tiny muted" style="margin-top: 1rem;">
+          Note: Some features require a profile to unlock
+        </div>
+      </div>
+      
+      <!-- Warning for paid tiers -->
+      <div class="upgrade-warning hidden" id="upgradeWarning">
+        <div class="warning-banner">
+          ⚠️ <strong>Premium features require a profile</strong><br>
+          You selected a paid tier, but skipped profile creation. You'll continue as free user.
+        </div>
+      </div>
+      
+      <button class="btn secondary" id="btnBackToTiers" style="margin-top: 2rem;">← Back to Plans</button>
+    </section>
+
+    <section class="card hidden" id="viewHome">
+      <h1>🎉 PHONE PARTY</h1>
+      <p class="muted">
+        Connect your phones and turn up the volume!
+      </p>
+
+      <!-- Animated DJ Booth Visual -->
+      <div class="dj-booth-visual">
+        <div class="dj-light dj-light-1"></div>
+        <div class="dj-light dj-light-2"></div>
+        <div class="dj-light dj-light-3"></div>
+      </div>
+
+      <!-- Two Giant Neon Buttons -->
+      <div class="start-join-buttons">
+        <button class="btn-giant btn-create-party" id="btnShowCreateParty">
+          <span class="btn-giant-icon">🎧</span>
+          <span class="btn-giant-text">CREATE PARTY</span>
+          <span class="btn-giant-subtitle">Be the DJ</span>
+        </button>
+        <button class="btn-giant btn-join-party" id="btnShowJoinParty">
+          <span class="btn-giant-icon">🎵</span>
+          <span class="btn-giant-text">JOIN PARTY</span>
+          <span class="btn-giant-subtitle">Join the vibe</span>
+        </button>
+      </div>
+
+      <!-- Expandable Create Party Section -->
+      <div class="party-form-section hidden" id="createPartySection">
+        <h2>🎧 Start Your Party</h2>
+        <div class="box">
+          <label class="lbl">Your DJ name (required)</label>
+          <input id="hostName" class="input" placeholder="DJ CoolVibes" required />
+          
+          <!-- Music from Phone Section -->
+          <div class="music-section">
+            <h4 class="music-section-title">🎵 Music (from your phone)</h4>
+            <div class="music-controls">
+              <input type="file" id="musicFileInput" accept="audio/*" style="display: none;" />
+              <button type="button" class="btn secondary" id="btnChooseMusic">Choose music file</button>
+              <button type="button" class="btn secondary hidden" id="btnChangeMusic">Change file</button>
+            </div>
+            <div class="music-info hidden" id="musicInfo">
+              <div class="music-file-details">
+                <span class="music-filename" id="musicFilename"></span>
+                <span class="music-filesize" id="musicFilesize"></span>
+                <span class="pill-enhanced music-status-ready" id="musicStatusReady">✓ Ready</span>
+              </div>
+            </div>
+            
+            <!-- Upload Status -->
+            <div class="hidden" id="uploadStatus">
+              <div class="upload-progress-container">
+                <div class="upload-progress-bar">
+                  <div class="upload-progress-fill" id="uploadProgressBar" style="width: 0%"></div>
+                </div>
+                <div class="upload-progress-text" id="uploadProgress">Preparing upload...</div>
+              </div>
+            </div>
+            
+            <div class="tiny muted music-helper">
+              Pick any audio file from your phone (MP3, WAV, M4A, etc).
+            </div>
+            <div class="music-warning hidden" id="musicWarning"></div>
+          </div>
+
+          <button type="button" class="btn primary" id="btnCreate">🎉 Start the party</button>
+          <div class="party-status hidden" id="partyStatus">
+            <div class="status-message" id="createStatusMessage">Waiting...</div>
+            <div class="debug-info tiny muted" id="createDebugInfo"></div>
+          </div>
+        </div>
+        <button class="btn secondary" id="btnHideCreateParty" style="margin-top: 1rem;">← Back</button>
+      </div>
+
+      <!-- Expandable Join Party Section -->
+      <div class="party-form-section hidden" id="joinPartySection">
+        <h2>🎵 Join a Party</h2>
+        <div class="box">
+          <label class="lbl">Party code</label>
+          <input id="joinCode" class="input" placeholder="ABC123" />
+          <label class="lbl">Your nickname (optional)</label>
+          <input id="guestName" class="input" placeholder="Leave blank for 'Guest 2'" />
+          <button class="btn primary" id="btnJoin">🎵 Join the vibe</button>
+          <div class="party-status hidden" id="joinStatus">
+            <div class="status-message" id="joinStatusMessage">Waiting...</div>
+            <div class="debug-info tiny muted" id="joinDebugInfo"></div>
+          </div>
+        </div>
+        <button class="btn secondary" id="btnHideJoinParty" style="margin-top: 1rem;">← Back</button>
+      </div>
+
+      <div class="line"></div>
+
+      <div class="row">
+        <label class="check">
+          <input type="checkbox" id="togglePro" />
+          <span><b>Pro Test Mode</b> (unlock all features)</span>
+        </label>
+      </div>
+    </section>
+
+
+    <section class="card hidden" id="viewParty">
+      <div class="row space">
+        <div>
+          <div class="row" style="align-items: center; gap: 0.5rem;">
+            <h2 id="partyTitle">Party</h2>
+            <!-- Role Badge -->
+            <span class="role-badge hidden" id="roleBadge">Host</span>
+            <!-- Sync Status Indicator -->
+            <span class="sync-status-indicator" id="syncStatusIndicator" title="Sync Status">
+              <span class="sync-icon">✓</span>
+              <span class="sync-text">Synced</span>
+            </span>
+          </div>
+          <div class="muted tiny" id="partyMeta"></div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <!-- Referral Button (Host Only) -->
+          <button class="btn hidden" id="btnReferral" title="Share & Earn" style="background: rgba(255,140,0,0.2);">
+            🎁 Invite
+          </button>
+          <button class="btn" id="btnDjAddons" title="Add-ons" style="background: rgba(255,255,255,0.1);">
+            ✨ Add-ons
+          </button>
+          <button class="btn danger" id="btnLeave">Leave</button>
+        </div>
+      </div>
+
+      <!-- OFFLINE MODE WARNING BANNER -->
+      <div class="offline-warning" id="offlineWarning" style="display:none;">
+        <div class="warning-icon">⚠️</div>
+        <div class="warning-content">
+          <strong>PROTOTYPE MODE - Single Device Only</strong>
+          <p>Multi-device sync not available in this prototype. Party codes shown for UI testing only. For real multi-device testing, server-side implementation required.</p>
+        </div>
+      </div>
+
+      <!-- Party Pass Status/Upgrade Banner -->
+      <div class="party-pass-banner hidden" id="partyPassBanner">
+        <div class="party-pass-status hidden" id="partyPassActive">
+          <div class="party-pass-icon">🎉</div>
+          <div class="party-pass-info">
+            <div class="party-pass-title" id="partyPassTitle">Party Pass Active</div>
+            <div class="party-pass-timer" id="partyPassTimer">5h 42m remaining</div>
+            <div class="party-pass-desc hidden" id="partyPassDesc">Pro features unlocked for this party</div>
+          </div>
+        </div>
+        <div class="party-pass-upgrade hidden" id="partyPassUpgrade">
+          <div class="party-pass-upgrade-content">
+            <div class="party-pass-upgrade-title">🎉 Upgrade this party — £3.99 · 2 hours</div> <!-- GBP - Party Pass pricing -->
+            <p class="party-pass-upgrade-tagline">Go Pro for tonight. No commitment.</p>
+            <button class="btn-party-pass" id="btnActivatePartyPass">Activate Party Pass</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Crowd Energy Meter (Host Only) -->
+      <div class="crowd-energy-card hidden" id="crowdEnergyCard">
+        <div class="crowd-energy-header">
+          <h3>🔥 Crowd Energy</h3>
+          <div class="crowd-energy-value" id="crowdEnergyValue">0</div>
+        </div>
+        <div class="crowd-energy-meter">
+          <div class="crowd-energy-fill" id="crowdEnergyFill"></div>
+          <div class="crowd-energy-peak" id="crowdEnergyPeakIndicator"></div>
+        </div>
+        <div class="crowd-energy-labels">
+          <span class="tiny muted">Reactions boost energy</span>
+          <span class="tiny muted">Peak: <span id="crowdEnergyPeakValue">0</span></span>
+        </div>
+      </div>
+
+      <!-- DJ Moment Buttons (Host Only) -->
+      <div class="dj-moments-card hidden" id="djMomentsCard">
+        <h3>⚡ DJ Moments</h3>
+        <div class="dj-moments-grid">
+          <button class="btn-dj-moment" id="btnMomentDrop" data-moment="DROP">
+            <span class="moment-icon">💥</span>
+            <span class="moment-label">DROP</span>
+          </button>
+          <button class="btn-dj-moment" id="btnMomentBuild" data-moment="BUILD">
+            <span class="moment-icon">📈</span>
+            <span class="moment-label">BUILD</span>
+          </button>
+          <button class="btn-dj-moment" id="btnMomentBreak" data-moment="BREAK">
+            <span class="moment-icon">⏸️</span>
+            <span class="moment-label">BREAK</span>
+          </button>
+          <button class="btn-dj-moment" id="btnMomentHandsUp" data-moment="HANDS_UP">
+            <span class="moment-icon">🙌</span>
+            <span class="moment-label">HANDS UP</span>
+          </button>
+        </div>
+        <div class="current-moment hidden" id="currentMomentDisplay">
+          <span class="current-moment-label">Current:</span>
+          <span class="current-moment-value" id="currentMomentValue">DROP</span>
+        </div>
+      </div>
+
+      <div class="grid3">
+        <div class="box">
+          <div class="row space">
+            <div>
+              <div class="lbl">Party code</div>
+              <div class="code" id="partyCode">------</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" id="btnCopy">Copy</button>
+              <button class="btn" id="btnShowQR" title="Show QR Code">📱</button>
+              <button class="btn" id="btnShare" title="Share">📤</button>
+            </div>
+          </div>
+          <div class="tiny muted">Share code with friends.</div>
+          <div class="party-info-footer">
+            <div class="tiny muted" id="partyGuestCount">Waiting for guests...</div>
+            <div class="tiny muted" id="partyTimeRemaining"></div>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="row space">
+            <div>
+              <div class="lbl">Connection strength</div>
+              <div class="row">
+                <span class="badge" id="qualityTier">Good</span>
+                <span class="tiny muted" id="qualityHint">Minor drift possible</span>
+              </div>
+            </div>
+            <div class="right tiny muted"><span id="qualityScore">80</span>/100</div>
+          </div>
+          <div class="bar"><div class="fill" id="qualityFill" style="width:80%"></div></div>
+          <div class="tiny muted" id="limitsLine">Recommended: 4 · Hard cap: 8</div>
+        </div>
+
+        <div class="box">
+          <div class="lbl">Playback</div>
+          
+          <!-- Audio Player -->
+          <audio id="hostAudioPlayer" preload="auto" controls></audio>
+          
+          <!-- Status Area -->
+          <div class="playback-status" id="playbackStatus">
+            <span class="status-label">Status:</span>
+            <span class="status-message" id="statusMessage">No music loaded</span>
+          </div>
+          
+          <div class="row gap">
+            <button class="btn primary" id="btnPlay">Play</button>
+            <button class="btn" id="btnPause">Pause</button>
+            <button class="btn" id="btnAd">Show ad (Free)</button>
+          </div>
+          <button class="btn secondary hidden" id="btnBackToDj">🎧 Back to DJ View</button>
+          <div class="tiny muted" id="adLine">Ads can pause music for free users.</div>
+        </div>
+      </div>
+
+      <div class="line"></div>
+
+      <!-- DJ Controls Card -->
+      <div class="box" id="djControlsCard">
+        <h3>DJ Controls</h3>
+        
+        <!-- Host Gift Party Pass (Host Only) -->
+        <div class="host-gift-section hidden" id="hostGiftSection">
+          <div class="host-gift-header">
+            <span class="gift-icon">🎁</span>
+            <span class="gift-label">Gift Party Pass to Everyone</span>
+          </div>
+          <button class="btn-gift-party-pass" id="btnGiftPartyPass">
+            🎉 Unlock Party for Everyone (£3.99) <!-- GBP - Party Pass pricing -->
+          </button>
+          <div class="tiny muted">One-time purchase unlocks Pro features for all guests in this party</div>
+        </div>
+
+        <div class="lbl">Chat Mode</div>
+        <div class="chat-mode-selector">
+          <label class="chat-mode-option">
+            <input type="radio" name="chatMode" value="OPEN" id="chatModeOpen" checked />
+            <span class="chat-mode-label">
+              <span class="chat-mode-icon">💬</span>
+              <span class="chat-mode-text">OPEN</span>
+            </span>
+          </label>
+          <label class="chat-mode-option">
+            <input type="radio" name="chatMode" value="EMOJI_ONLY" id="chatModeEmojiOnly" />
+            <span class="chat-mode-label">
+              <span class="chat-mode-icon">😀</span>
+              <span class="chat-mode-text">EMOJI ONLY</span>
+            </span>
+          </label>
+          <label class="chat-mode-option">
+            <input type="radio" name="chatMode" value="LOCKED" id="chatModeLocked" />
+            <span class="chat-mode-label">
+              <span class="chat-mode-icon">🔒</span>
+              <span class="chat-mode-text">LOCKED</span>
+            </span>
+          </label>
+        </div>
+        <div class="tiny muted">Control guest messaging permissions</div>
+      </div>
+
+      <div class="line"></div>
+
+      <!-- Music Upload Section (Host Only) -->
+      <div class="box" id="musicUploadSection">
+        <h3>🎵 Music (from your phone)</h3>
+        <div class="music-upload-controls">
+          <input type="file" id="musicFileInput" accept="audio/*" style="display: none;" />
+          <button class="btn primary" id="btnChooseMusicFile">
+            📁 Choose Audio File
+          </button>
+          
+          <!-- Upload Status -->
+          <div class="upload-status hidden" id="uploadStatus">
+            <div class="upload-info">
+              <div class="upload-filename" id="uploadFilename">No file selected</div>
+              <div class="upload-size" id="uploadFileSize"></div>
+            </div>
+            <div class="upload-state" id="uploadState">
+              <span class="status-badge" id="uploadStateBadge">Ready</span>
+            </div>
+          </div>
+          
+          <!-- Upload Progress -->
+          <div class="upload-progress hidden" id="uploadProgress">
+            <div class="progress-bar">
+              <div class="progress-fill" id="uploadProgressFill" style="width: 0%"></div>
+            </div>
+            <div class="progress-text" id="uploadProgressText">Uploading... 0%</div>
+          </div>
+        </div>
+        <div class="tiny muted">Upload an audio file from your device to play for guests</div>
+      </div>
+
+      <div class="line"></div>
+
+      <!-- Host Queue Section -->
+      <div class="box" id="hostQueueSection">
+        <h3>📋 Queue</h3>
+        <div id="hostQueueList" class="host-queue-list">
+          <div class="queue-empty">No tracks in queue</div>
+        </div>
+        <div class="tiny muted">Queue up to 5 tracks to play next</div>
+      </div>
+
+      <div class="line"></div>
+
+      <div class="row space">
+        <h3>Friends connected</h3>
+        <div class="row gap">
+          <button class="btn" id="btnAddPhone">Add another phone</button>
+          <button class="btn" id="btnSpeaker">Use a speaker</button>
+        </div>
+      </div>
+
+      <div id="members"></div>
+
+      <div class="tiny muted" style="margin-top:10px">
+        Browser prototype — next step is the real Android app for proper sync.
+      </div>
+    </section>
+
+    <!-- DJ Screen Overlay (Host Only - Shows when playing) -->
+    <div class="dj-screen-overlay hidden" id="djScreenOverlay">
+      <div class="dj-screen-header">
+        <div class="dj-screen-title">
+          <span class="dj-icon-small">🎧</span>
+          <span>DJ MODE</span>
+        </div>
+        <button class="btn-close-dj" id="btnCloseDj">✕ Close DJ View</button>
+      </div>
+
+      <!-- DJ Main Visual Area -->
+      <div class="dj-main-visual">
+        <div class="dj-equalizer-large" id="djEqualizerLarge">
+          <div class="dj-eq-bar"></div>
+          <div class="dj-eq-bar"></div>
+          <div class="dj-eq-bar"></div>
+          <div class="dj-eq-bar"></div>
+          <div class="dj-eq-bar"></div>
+          <div class="dj-eq-bar"></div>
+          <div class="dj-eq-bar"></div>
+          <div class="dj-eq-bar"></div>
+        </div>
+        
+        <!-- Now Playing Display -->
+        <div class="dj-now-playing">
+          <div class="dj-now-playing-label">NOW PLAYING</div>
+          <div class="dj-now-playing-track" id="djNowPlayingTrack">No Track</div>
+        </div>
+        
+        <!-- Up Next Display -->
+        <div class="dj-up-next hidden" id="djUpNext">
+          <div class="dj-up-next-label">⏭ UP NEXT</div>
+          <div class="dj-up-next-track" id="djUpNextTrack">No track queued</div>
+        </div>
+      </div>
+
+      <!-- Guest Messages Area -->
+      <div class="dj-messages-area">
+        <div class="dj-messages-header">
+          <span class="dj-messages-icon">💬</span>
+          <span>GUEST REACTIONS</span>
+        </div>
+        <div class="dj-messages-container" id="djMessagesContainer">
+          <div class="dj-no-messages" id="djNoMessages">
+            Waiting for guest reactions...
+          </div>
+        </div>
+      </div>
+
+      <!-- DJ Emoji Reactions (Party Pass / Pro Monthly only) -->
+      <!-- Custom DJ-themed emoji panel (DJ-only, no crowd energy, no pop-ups) -->
+      <div class="dj-emoji-reactions-section hidden" id="djEmojiReactionsSection">
+        <div class="dj-emoji-reactions-header">
+          <span class="dj-messages-icon">🎧</span>
+          <span>DJ EMOJIS</span>
+        </div>
+        <div class="dj-emoji-reactions">
+          <!-- Custom DJ-themed emojis: appear in live reaction box, no crowd energy, no pop-ups -->
+          <button class="btn-emoji-reaction btn-dj-emoji" id="btnDjEmojiHeadphones" data-emoji="🎧" data-message="🎧">
+            🎧
+          </button>
+          <button class="btn-emoji-reaction btn-dj-emoji" id="btnDjEmojiMixer" data-emoji="🎛️" data-message="🎛️">
+            🎛️
+          </button>
+          <button class="btn-emoji-reaction btn-dj-emoji" id="btnDjEmojiDancer" data-emoji="🕺" data-message="🕺">
+            🕺
+          </button>
+          <button class="btn-emoji-reaction btn-dj-emoji" id="btnDjEmojiMic" data-emoji="🎤" data-message="🎤">
+            🎤
+          </button>
+        </div>
+        <div class="tiny muted">DJ-only reactions · Visible to all · No crowd energy</div>
+      </div>
+
+      <!-- DJ Preset Messages (Party Pass & Pro) -->
+      <div class="dj-preset-messages-section hidden" id="djPresetMessagesSection">
+        <div class="dj-preset-messages-header">
+          <span class="dj-messages-icon">📢</span>
+          <span>SEND TO GUESTS</span>
+        </div>
+        <div class="dj-preset-message-buttons">
+          <button class="btn-dj-preset-message" id="btnDjPresetGreat" data-message="🎉 Great track!">
+            🎉 Great track!
+          </button>
+          <button class="btn-dj-preset-message" id="btnDjPresetHype" data-message="🔥 Let's go!">
+            🔥 Let's go!
+          </button>
+          <button class="btn-dj-preset-message" id="btnDjPresetEnergy" data-message="⚡ Bring the energy!">
+            ⚡ Bring the energy!
+          </button>
+          <button class="btn-dj-preset-message" id="btnDjPresetDrop" data-message="💥 Drop incoming!">
+            💥 Drop incoming!
+          </button>
+          <button class="btn-dj-preset-message" id="btnDjPresetVibes" data-message="✨ Good vibes!">
+            ✨ Good vibes!
+          </button>
+          <button class="btn-dj-preset-message" id="btnDjPresetThanks" data-message="🙏 Thanks for joining!">
+            🙏 Thanks for joining!
+          </button>
+        </div>
+        <div class="tiny muted">Broadcast messages to all guests</div>
+      </div>
+
+      <!-- DJ Quick Buttons (Party Pass Only) -->
+      <div class="dj-quick-buttons-section hidden" id="djQuickButtonsContainer">
+        <div class="dj-messages-header">
+          <span class="dj-messages-icon">⚡</span>
+          <span>QUICK MESSAGES</span>
+        </div>
+        <div class="dj-quick-buttons-grid">
+          <button class="btn-dj-quick" onclick="sendDjQuickButton('WELCOME')">
+            🎉 Welcome
+          </button>
+          <button class="btn-dj-quick" onclick="sendDjQuickButton('MAKE_NOISE')">
+            🔥 Make Noise
+          </button>
+          <button class="btn-dj-quick" onclick="sendDjQuickButton('HANDS_UP')">
+            🙌 Hands Up
+          </button>
+          <button class="btn-dj-quick" onclick="sendDjQuickButton('NEXT_UP')">
+            ⏭️ Next Up
+          </button>
+          <button class="btn-dj-quick" onclick="sendDjQuickButton('THANKS')">
+            ❤️ Thanks
+          </button>
+        </div>
+        <div class="tiny muted">Party Pass: Quick messages to crowd</div>
+      </div>
+
+      <!-- DJ Messaging Locked (When Party Pass inactive) -->
+      <div class="messaging-locked-notice hidden" id="djMessagingLocked">
+        <div class="lock-icon">🔒</div>
+        <div class="lock-message">
+          <strong>Party Pass unlocks DJ quick buttons + auto prompts</strong>
+        </div>
+      </div>
+
+      <!-- DJ Messaging Feed (Party Pass) -->
+      <div class="messaging-feed-section hidden" id="djMessagingFeedSection">
+        <div class="messaging-feed-header">
+          <span>💬</span>
+          <span>PARTY CHAT</span>
+        </div>
+        <div class="messaging-feed" id="djMessagingFeed">
+          <div class="messaging-feed-empty">No messages yet...</div>
+        </div>
+      </div>
+
+      <!-- Crowd Energy in DJ View -->
+      <div class="dj-crowd-energy">
+        <div class="dj-crowd-energy-header">
+          <h3>🔥 CROWD ENERGY</h3>
+          <div class="dj-crowd-energy-value" id="djCrowdEnergyValue">0</div>
+        </div>
+        <div class="dj-crowd-energy-meter">
+          <div class="dj-crowd-energy-fill" id="djCrowdEnergyFill"></div>
+          <div class="dj-crowd-energy-peak" id="djCrowdEnergyPeakIndicator"></div>
+        </div>
+        <div class="dj-crowd-energy-labels">
+          <span class="tiny muted">Reactions boost energy</span>
+          <span class="tiny muted">Peak: <span id="djCrowdEnergyPeakValue">0</span></span>
+        </div>
+      </div>
+
+      <!-- Live Scoreboard in DJ View -->
+      <div class="dj-scoreboard-section">
+        <div class="dj-scoreboard-header">
+          <h3>🏆 LIVE SCOREBOARD</h3>
+          <div class="dj-session-score">
+            <span class="session-score-label">Your Score:</span>
+            <span class="session-score-value" id="djSessionScore">0</span>
+          </div>
+        </div>
+        <div class="dj-scoreboard-stats">
+          <div class="scoreboard-stat">
+            <div class="stat-icon">🎉</div>
+            <div class="stat-info">
+              <div class="stat-value" id="totalReactions">0</div>
+              <div class="stat-label">Reactions</div>
+            </div>
+          </div>
+          <div class="scoreboard-stat">
+            <div class="stat-icon">💬</div>
+            <div class="stat-info">
+              <div class="stat-value" id="totalMessages">0</div>
+              <div class="stat-label">Messages</div>
+            </div>
+          </div>
+          <div class="scoreboard-stat">
+            <div class="stat-icon">⚡</div>
+            <div class="stat-info">
+              <div class="stat-value" id="peakEnergy">0</div>
+              <div class="stat-label">Peak Energy</div>
+            </div>
+          </div>
+        </div>
+        <div class="dj-scoreboard-guests">
+          <h4>Top Contributors</h4>
+          <div class="scoreboard-list" id="djScoreboardList">
+            <div class="scoreboard-placeholder">
+              <span class="tiny muted">No guest activity yet...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DJ Moments in DJ View -->
+      <div class="dj-moments-section">
+        <h3>⚡ DJ MOMENTS</h3>
+        <div class="dj-moments-grid-view">
+          <button class="btn-dj-moment-view" id="btnDjMomentDrop" data-moment="DROP">
+            <span class="moment-icon">💥</span>
+            <span class="moment-label">DROP</span>
+          </button>
+          <button class="btn-dj-moment-view" id="btnDjMomentBuild" data-moment="BUILD">
+            <span class="moment-icon">📈</span>
+            <span class="moment-label">BUILD</span>
+          </button>
+          <button class="btn-dj-moment-view" id="btnDjMomentBreak" data-moment="BREAK">
+            <span class="moment-icon">⏸️</span>
+            <span class="moment-label">BREAK</span>
+          </button>
+          <button class="btn-dj-moment-view" id="btnDjMomentHandsUp" data-moment="HANDS_UP">
+            <span class="moment-icon">🙌</span>
+            <span class="moment-label">HANDS UP</span>
+          </button>
+        </div>
+        <div class="dj-current-moment hidden" id="djCurrentMomentDisplay">
+          <span class="current-moment-label">Current:</span>
+          <span class="current-moment-value" id="djCurrentMomentValue">DROP</span>
+        </div>
+      </div>
+
+      <!-- DJ Controls -->
+      <div class="dj-controls">
+        <button class="btn-dj-control" id="btnDjPlay">
+          <span class="dj-control-icon">▶️</span>
+          <span>PLAY</span>
+        </button>
+        <button class="btn-dj-control" id="btnDjPause">
+          <span class="dj-control-icon">⏸️</span>
+          <span>PAUSE</span>
+        </button>
+        <button class="btn-dj-control" id="btnDjStop">
+          <span class="dj-control-icon">⏹️</span>
+          <span>STOP</span>
+        </button>
+        <button class="btn-dj-control secondary" id="btnDjNext">
+          <span class="dj-control-icon">⏭️</span>
+          <span>NEXT</span>
+        </button>
+      </div>
+
+      <!-- Queue Next Track -->
+      <div class="dj-queue-section">
+        <input type="file" id="djQueueFileInput" accept="audio/*" style="display: none;" />
+        <button class="btn-dj-queue" id="btnDjQueueTrack">
+          <span class="dj-queue-icon">📁</span>
+          <span>QUEUE NEXT TRACK</span>
+        </button>
+      </div>
+
+      <!-- DJ Queue List -->
+      <div class="dj-queue-list-section">
+        <div class="dj-queue-header">
+          <span class="dj-queue-title">📋 QUEUE</span>
+        </div>
+        <div id="djHostQueueList" class="dj-queue-list">
+          <div class="queue-empty">No tracks in queue</div>
+        </div>
+      </div>
+
+      <!-- DJ Short Message (Party Pass / Pro Monthly only) -->
+      <div class="dj-short-message-section hidden" id="djShortMessageSection">
+        <div class="dj-short-message-container">
+          <input 
+            type="text" 
+            id="djShortMessageInput" 
+            class="dj-short-message-input" 
+            placeholder="Type a short message (max 30)" 
+            maxlength="30"
+          />
+          <button class="btn-dj-short-message" id="btnDjSendShortMessage">
+            <span>SEND</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Party Info -->
+      <div class="dj-party-info">
+        <div class="dj-party-code">
+          <span class="dj-info-label">PARTY CODE:</span>
+          <span class="dj-info-value" id="djPartyCode">------</span>
+        </div>
+        <div class="dj-party-guests">
+          <span class="dj-info-label">GUESTS:</span>
+          <span class="dj-info-value" id="djGuestCount">0</span>
+        </div>
+      </div>
+
+      <!-- Flash Overlay for Messages -->
+      <div class="dj-flash-overlay" id="djFlashOverlay"></div>
+    </div>
+
+    <!-- Payment Screen for Party Pass -->
+    <section class="card hidden" id="viewPayment">
+      <h1>Activate Party Pass</h1>
+      <p class="muted">Complete your purchase to unlock Party Pass features</p>
+
+      <div class="payment-summary glass-card">
+        <h2>Order Summary</h2>
+        <div class="payment-item">
+          <span>Party Pass (2-Hour Session)</span>
+          <span class="payment-price">£3.99</span> <!-- GBP - Party Pass pricing -->
+        </div>
+        <div class="payment-total">
+          <strong>Total</strong>
+          <strong>£3.99</strong> <!-- GBP - Party Pass total -->
+        </div>
+        
+        <div class="payment-features">
+          <h3>What's Included:</h3>
+          <ul>
+            <li>✓ Up to 4 phones</li>
+            <li>✓ 2 hours duration</li>
+            <li>✓ Chat + emoji reactions</li>
+            <li>✓ DJ quick message buttons</li>
+            <li>✓ Guest quick replies</li>
+            <li>✓ Auto party prompts</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="payment-form glass-card">
+        <h3>Payment Method</h3>
+        <p class="muted tiny">This is a prototype - payment processing not implemented</p>
+        
+        <div class="payment-buttons">
+          <button class="btn btn-party-pass" id="btnCompletePayment">Complete Purchase (Demo)</button>
+          <button class="btn secondary" id="btnCancelPayment">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Guest Party View -->
+    <section class="card hidden" id="viewGuest">
+      <div class="row space">
+        <div>
+          <h2>🎵 Guest Party</h2>
+          <div class="muted tiny" id="guestMeta">Connected to party</div>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn" id="btnGuestAddons" title="Add-ons" style="background: rgba(255,255,255,0.1);">
+            ✨ Add-ons
+          </button>
+          <button class="btn danger" id="btnGuestLeave">Leave Party</button>
+        </div>
+      </div>
+
+      <!-- Party Code and Connection Status -->
+      <div class="guest-header">
+        <div class="glass-card">
+          <div class="row space">
+            <div>
+              <div class="lbl">Party Code</div>
+              <div class="code" id="guestPartyCode">------</div>
+            </div>
+            <div class="guest-connection-status">
+              <div class="lbl">Status</div>
+              <span class="badge" id="guestConnectionStatus">Connecting...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Party Status Badge -->
+      <div class="guest-party-status">
+        <div class="party-status-badge" id="guestPartyStatusBadge">
+          <span class="party-status-icon">✨</span>
+          <span class="party-status-text" id="guestPartyStatusText">Free Plan</span>
+          <span class="party-status-timer hidden" id="guestPartyPassTimer"></span>
+        </div>
+      </div>
+
+      <!-- Party Info: Guest Count and Time Remaining -->
+      <div class="glass-card guest-party-info">
+        <div class="row space">
+          <div>
+            <div class="lbl">Guests</div>
+            <div class="party-info-value" id="guestPartyGuestCount">0 guests</div>
+          </div>
+          <div>
+            <div class="lbl">Time Left</div>
+            <div class="party-info-value" id="guestTimeRemaining">Loading...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Now Playing Section -->
+      <div class="glass-card guest-now-playing">
+        <h3 class="section-title">🎵 Now Playing</h3>
+        <div class="now-playing-content">
+          <div class="track-info">
+            <div class="track-filename" id="guestNowPlayingFilename">No track selected</div>
+            <div class="playback-state-badge">
+              <span class="playback-state-icon" id="guestPlaybackStateIcon">⏸</span>
+              <span class="playback-state-text" id="guestPlaybackStateText">Waiting</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Up Next Section -->
+      <div class="glass-card guest-up-next hidden" id="guestUpNextSection">
+        <h4 class="section-title-small">⏭ Up Next</h4>
+        <div class="up-next-content">
+          <div class="up-next-filename" id="guestUpNextFilename">No track queued</div>
+          <span class="up-next-status-badge">Ready</span>
+        </div>
+      </div>
+      
+      <!-- Queue Section -->
+      <div class="glass-card guest-queue-container">
+        <h4 class="guest-queue-title">📋 Queue</h4>
+        <div id="guestQueueList">
+          <div class="queue-empty">No tracks in queue</div>
+        </div>
+      </div>
+
+      <!-- DJ Visuals Area -->
+      <div class="glass-card guest-dj-visuals">
+        <h3 class="section-title">🎧 DJ Visuals</h3>
+        <div class="dj-visual-container" id="guestDjVisuals">
+          <div class="equalizer guest-equalizer" id="guestEqualizer">
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+            <div class="eq-bar"></div>
+          </div>
+          <div class="visual-status-text" id="guestVisualStatus">Synced visuals (prototype)</div>
+        </div>
+      </div>
+
+      <!-- Guest Volume Control -->
+      <div class="glass-card guest-volume">
+        <h4 class="section-title-small">🔊 Your Volume (Local)</h4>
+        <div class="volume-control">
+          <input type="range" min="0" max="100" value="80" class="volume-slider" id="guestVolumeSlider" />
+          <span class="volume-value" id="guestVolumeValue">80%</span>
+        </div>
+        <div class="tiny muted">Adjust volume on your device only</div>
+      </div>
+
+      <!-- Guest Sync Controls -->
+      <div class="glass-card guest-sync-controls">
+        <h4 class="section-title-small">🎵 Playback Controls</h4>
+        
+        <!-- Guest Playback Buttons -->
+        
+        <!-- Autoplay Notice (hidden by default) -->
+        <div id="guestAutoplayNotice" style="display: none; padding: 8px; margin-bottom: 12px; background: var(--warning, #ffd15a); color: var(--bg, #0a0a0a); border-radius: 4px; text-align: center; font-size: 14px;">
+          🔊 Tap Play to start audio
+        </div>
+        
+        <div class="guest-playback-buttons">
+          <button class="btn-guest-play" id="btnGuestPlay" title="Request DJ to play">
+            ▶️ Play
+          </button>
+          <button class="btn-guest-pause" id="btnGuestPause" title="Request DJ to pause">
+            ⏸️ Pause
+          </button>
+          <button class="btn-guest-stop" id="btnGuestStop" title="Stop and reset playback">
+            ⏹️ Stop
+          </button>
+        </div>
+        <div class="tiny muted" style="margin-bottom: 12px;">Request the DJ to control playback</div>
+        
+        <!-- DEPRECATED: Manual guest sync button -->
+        <!-- This button is deprecated - guests rely on automatic synchronization -->
+        <!-- Kept for emergency manual sync scenarios only -->
+        <!-- Does NOT affect emoji/reaction system -->
+        <!-- Tap to Sync Button -->
+        <button class="btn-guest-sync" id="btnGuestSync" title="Re-sync audio with DJ">
+          🔄 Tap to Sync
+        </button>
+        <div class="tiny muted" style="margin-bottom: 20px;">Manually re-sync if audio drifts</div>
+        
+        <!-- Volume Control -->
+        <div class="guest-volume-control">
+          <label class="tiny muted" for="guestVolumeSlider">🔊 Volume</label>
+          <input type="range" id="guestVolumeSlider" min="0" max="100" value="80" class="volume-slider" />
+          <span class="tiny muted" id="guestVolumeValue">80%</span>
+        </div>
+        
+        <!-- Sync Quality Indicator -->
+        <div class="sync-quality-section">
+          <div class="sync-quality-header">
+            <span class="sync-quality-label">Sync Quality:</span>
+            <span class="sync-quality-badge" id="guestSyncQuality">Good</span>
+          </div>
+          <div class="sync-drift-info">
+            <span class="tiny muted">Drift: <span id="guestDriftValue">0.00</span>s</span>
+          </div>
+        </div>
+
+        <!-- DEPRECATED: Conditional resync button -->
+        <!-- Shows when drift >1.5s or 3+ correction failures -->
+        <!-- This button is deprecated - guests use automatic sync -->
+        <!-- Does NOT affect emoji/reaction system -->
+        <!-- Resync Button -->
+        <button class="btn-resync" id="btnGuestResync">
+          <span class="resync-icon">🔄</span>
+          <span>Tap to Resync</span>
+        </button>
+
+        <!-- Report Out of Sync Button -->
+        <button class="btn-report-sync secondary" id="btnReportOutOfSync">
+          <span>⚠️ Report Out of Sync</span>
+        </button>
+
+        <div class="tiny muted">Use resync if audio feels off</div>
+      </div>
+
+      <!-- Advanced Sync Monitor (SyncSpeaker AmpSync+) -->
+      <div class="glass-card sync-monitor hidden" id="syncMonitor">
+        <h4 class="section-title-small">📊 Sync Monitor (AmpSync+)</h4>
+        
+        <div class="sync-stats-grid">
+          <div class="sync-stat">
+            <div class="sync-stat-label">Latency</div>
+            <div class="sync-stat-value" id="syncLatencyValue">-- ms</div>
+          </div>
+          
+          <div class="sync-stat">
+            <div class="sync-stat-label">Clock Offset</div>
+            <div class="sync-stat-value" id="syncClockOffsetValue">-- ms</div>
+          </div>
+          
+          <div class="sync-stat">
+            <div class="sync-stat-label">Playback Rate</div>
+            <div class="sync-stat-value" id="syncPlaybackRateValue">1.000x</div>
+          </div>
+          
+          <div class="sync-stat">
+            <div class="sync-stat-label">Buffer Health</div>
+            <div class="sync-stat-value">
+              <div class="buffer-health-bar">
+                <div class="buffer-health-fill" id="syncBufferFill" style="width: 100%"></div>
+              </div>
+              <span class="buffer-health-text" id="syncBufferText">150ms</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="sync-monitor-footer">
+          <button class="btn-sync-toggle tiny-btn" id="btnToggleSyncDetails">
+            Show Details
+          </button>
+        </div>
+        
+        <!-- Detailed Sync Info (collapsible) -->
+        <div class="sync-details hidden" id="syncDetails">
+          <div class="sync-detail-row">
+            <span class="sync-detail-label">Last Sync:</span>
+            <span class="sync-detail-value" id="syncLastSyncValue">--</span>
+          </div>
+          <div class="sync-detail-row">
+            <span class="sync-detail-label">Drift:</span>
+            <span class="sync-detail-value" id="syncDriftValue">-- ms</span>
+          </div>
+          <div class="sync-detail-row">
+            <span class="sync-detail-label">Predicted Drift:</span>
+            <span class="sync-detail-value" id="syncPredictedDriftValue">-- ms</span>
+          </div>
+          <div class="sync-detail-row">
+            <span class="sync-detail-label">Corrections:</span>
+            <span class="sync-detail-value" id="syncCorrectionsValue">0</span>
+          </div>
+          <div class="sync-detail-row">
+            <span class="sync-detail-label">Network Stability:</span>
+            <span class="sync-detail-value" id="syncNetworkStabilityValue">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Guest Scoreboard Section -->
+      <div class="glass-card guest-scoreboard hidden" id="guestScoreboardCard">
+        <div class="guest-scoreboard-header">
+          <h4 class="section-title-small">🏆 Party Scoreboard</h4>
+        </div>
+        <div class="guest-scoreboard-content">
+          <div class="guest-your-score">
+            <div class="your-score-label">Your Points</div>
+            <div class="your-score-value" id="guestYourScore">0</div>
+            <div class="your-score-rank tiny muted">Rank: <span id="guestYourRank">#-</span></div>
+          </div>
+          <div class="guest-scoreboard-top">
+            <h5 class="tiny">Top 5 Contributors</h5>
+            <div class="guest-scoreboard-list" id="guestScoreboardList">
+              <div class="scoreboard-placeholder">
+                <span class="tiny muted">No activity yet...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DJ Messages to Guests -->
+      <div class="glass-card guest-dj-messages hidden" id="guestDjMessagesCard">
+        <div class="guest-dj-messages-header">
+          <h4 class="section-title-small">📢 DJ Messages</h4>
+        </div>
+        <div class="guest-dj-messages-container" id="guestDjMessagesContainer">
+          <div class="guest-no-dj-messages" id="guestNoDjMessages">
+            No messages from DJ yet
+          </div>
+        </div>
+      </div>
+
+      <!-- Unified Reactions Feed (DJ + Guest Messages) -->
+      <div class="glass-card guest-reactions-feed">
+        <div class="guest-reactions-feed-header">
+          <h4 class="section-title-small">💬 Party Reactions</h4>
+          <div class="tiny muted">Live feed from DJ and guests</div>
+        </div>
+        <div class="guest-unified-feed-container" id="guestUnifiedFeedContainer">
+          <div class="guest-no-messages">
+            No reactions yet...
+          </div>
+        </div>
+      </div>
+
+      <!-- Guest Messages to Host -->
+      <div class="glass-card guest-messages">
+        <div class="guest-messages-header">
+          <h4 class="section-title-small">💬 Send Message to DJ</h4>
+          <div class="guest-chat-mode-badge" id="guestChatModeBadge">
+            <span class="chat-mode-status-icon" id="guestChatModeIcon">💬</span>
+            <span class="chat-mode-status-text" id="guestChatModeText">Chat: OPEN</span>
+          </div>
+        </div>
+        
+        <!-- Emoji Reactions (always visible) -->
+        <div class="guest-emoji-reactions" id="guestEmojiReactions">
+          <button class="btn-emoji-reaction" id="btnEmojiHeart" data-emoji="❤️" data-message="❤️">
+            ❤️
+          </button>
+          <button class="btn-emoji-reaction" id="btnEmojiLove" data-emoji="😍" data-message="😍">
+            😍
+          </button>
+          <button class="btn-emoji-reaction" id="btnEmojiFire" data-emoji="🔥" data-message="🔥">
+            🔥
+          </button>
+          <button class="btn-emoji-reaction" id="btnEmojiParty" data-emoji="🎉" data-message="🎉">
+            🎉
+          </button>
+          <button class="btn-emoji-reaction" id="btnEmojiDance" data-emoji="💃" data-message="💃">
+            💃
+          </button>
+          <button class="btn-emoji-reaction" id="btnEmojiThumbsUp" data-emoji="👍" data-message="👍">
+            👍
+          </button>
+          <button class="btn-emoji-reaction" id="btnEmojiStar" data-emoji="⭐" data-message="⭐">
+            ⭐
+          </button>
+          <button class="btn-emoji-reaction" id="btnEmojiLightning" data-emoji="⚡" data-message="⚡">
+            ⚡
+          </button>
+        </div>
+        
+        <!-- Text Messages (shown when not emoji-only or locked) -->
+        <div class="guest-message-buttons" id="guestTextMessages">
+          <button class="btn-guest-message" id="btnMessageTune" data-message="TUUUUNE!!!">
+            🔥 TUUUUNE!!!
+          </button>
+          <button class="btn-guest-message" id="btnMessageTuneUp" data-message="Tune it up!!">
+            🎚️ Tune it up!!
+          </button>
+          <button class="btn-guest-message" id="btnMessageNext" data-message="Next!">
+            ⏭️ Next!
+          </button>
+        </div>
+        <div class="tiny muted">Send reactions to the host's DJ screen</div>
+      </div>
+
+      <!-- Guest Quick Replies (Party Pass Only) -->
+      <div class="guest-quick-replies-section hidden" id="guestQuickRepliesContainer">
+        <div class="messaging-header">
+          <span>💬</span>
+          <span>QUICK REPLIES</span>
+        </div>
+        <div class="guest-quick-replies-grid">
+          <button class="btn-guest-quick" onclick="sendGuestQuickReply('LOVE_THIS')">
+            🔥 Love this
+          </button>
+          <button class="btn-guest-quick" onclick="sendGuestQuickReply('TURN_IT_UP')">
+            🙌 Turn it up
+          </button>
+          <button class="btn-guest-quick" onclick="sendGuestQuickReply('WOW')">
+            😮 Wow
+          </button>
+          <button class="btn-guest-quick" onclick="sendGuestQuickReply('DANCE')">
+            💃 Dance break
+          </button>
+          <button class="btn-guest-quick" onclick="sendGuestQuickReply('BIG_VIBE')">
+            🫶 Big vibe
+          </button>
+        </div>
+        <div class="tiny muted">Party Pass: Quick replies</div>
+      </div>
+
+      <!-- Guest Chat Input (Party Pass Only) -->
+      <div class="guest-chat-input-section hidden" id="guestChatInputContainer">
+        <div class="messaging-header">
+          <span>✍️</span>
+          <span>TYPE MESSAGE</span>
+        </div>
+        <div class="chat-input-wrapper">
+          <input 
+            type="text" 
+            id="guestChatInput" 
+            class="chat-input" 
+            placeholder="Type a short message (max 60 chars)..."
+            maxlength="60"
+          />
+          <button class="btn-send-chat" id="btnSendGuestChat">Send</button>
+        </div>
+        <div class="tiny muted">Party Pass: Type short messages (max 60 chars)</div>
+      </div>
+
+      <!-- Guest Messaging Locked (When Party Pass inactive) -->
+      <div class="messaging-locked-notice hidden" id="guestMessagingLocked">
+        <div class="lock-icon">🔒</div>
+        <div class="lock-message">
+          <strong>Party Pass required to chat</strong>
+          <ul class="lock-features">
+            <li>• Chat & emoji reactions</li>
+            <li>• Quick replies</li>
+            <li>• DJ quick messages</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Guest Messaging Feed (Party Pass) -->
+      <div class="messaging-feed-section hidden" id="guestMessagingFeedSection">
+        <div class="messaging-feed-header">
+          <span>💬</span>
+          <span>PARTY CHAT</span>
+        </div>
+        <div class="messaging-feed" id="guestMessagingFeed">
+          <div class="messaging-feed-empty">No messages yet...</div>
+        </div>
+      </div>
+
+      <div class="tiny muted" style="margin-top:20px; text-align: center;">
+        Playback controlled by host · Browser prototype
+      </div>
+    </section>
+  
+<!-- Promo Code -->
+<button class="btn secondary" id="promoBtn">Have a promo code?</button>
+
+<div class="modal hidden" id="promoModal">
+  <div class="modalCard">
+    <h3>Enter promo code</h3>
+    <input id="promoInput" placeholder="Promo code" />
+    <button class="btn primary" id="promoApply">Unlock this party</button>
+    <p class="hint">Promo codes unlock Pro for one party only.</p>
+    <button class="btn link" id="promoClose">Cancel</button>
+  </div>
+</div>
+
+</main>
+
+  <div class="modal hidden" id="modalPaywall">
+    <div class="modalCard">
+      <h3>Support Phone Party</h3>
+      <p class="muted">Support removes ads, allows up to 10 phones, and lets you add more phones when you choose.</p>
+      <ul class="list">
+        <li>No ads</li>
+        <li>Up to 10 phones</li>
+        <li>Connection strength override warning + accept</li>
+        <li>Speaker support</li>
+      </ul>
+      <div class="row gap">
+        <button class="btn primary" id="btnProYes">Support mode (Pro)</button>
+        <button class="btn" id="btnProNo">Not now</button>
+      </div>
+      <div class="tiny muted">Subscription only. Cancel anytime.</div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="modalWarn">
+    <div class="modalCard">
+      <h3>Heads up</h3>
+      <p class="muted" id="warnText"></p>
+      <div class="row gap">
+        <button class="btn" id="btnWarnCancel">Cancel</button>
+        <button class="btn primary" id="btnWarnAnyway">Add anyway</button>
+      </div>
+      <div class="tiny muted">This option is for supporters.</div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="modalSpeaker">
+    <div class="modalCard">
+      <h3>Connect to a speaker</h3>
+      <p class="muted">
+        Connect a Bluetooth or AUX speaker to the host phone for louder sound. (Real app will handle delay better.)
+      </p>
+      <div class="row gap">
+        <button class="btn primary" id="btnSpeakerOk">Got it</button>
+      </div>
+      <div class="tiny muted">Speaker support is for supporters.</div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="modalQRCode">
+    <div class="modalCard">
+      <h3>📱 Join Party</h3>
+      <div id="qrCodeContainer"></div>
+      <button class="btn primary full-width" id="btnCloseQR">Close</button>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+
+   <!-- Party End Recap Modal -->
+  <div class="modal hidden" id="modalPartyRecap">
+    <div class="modal-card party-recap-card">
+      <div class="recap-header">
+        <h2>🎉 Great set, DJ!</h2>
+        <p class="muted">Thanks for using Phone Party!</p>
+      </div>
+      <div class="recap-stats">
+        <div class="recap-stat">
+          <div class="recap-stat-icon">⏱️</div>
+          <div class="recap-stat-value" id="recapDuration">0 min</div>
+          <div class="recap-stat-label">Party Duration</div>
+        </div>
+        <div class="recap-stat">
+          <div class="recap-stat-icon">🎵</div>
+          <div class="recap-stat-value" id="recapTracks">0</div>
+          <div class="recap-stat-label">Tracks Played</div>
+        </div>
+        <div class="recap-stat">
+          <div class="recap-stat-icon">🔥</div>
+          <div class="recap-stat-value" id="recapPeakEnergy">0</div>
+          <div class="recap-stat-label">Peak Energy</div>
+        </div>
+        <div class="recap-stat">
+          <div class="recap-stat-icon">💬</div>
+          <div class="recap-stat-value" id="recapReactions">0</div>
+          <div class="recap-stat-label">Total Reactions</div>
+        </div>
+      </div>
+      <div class="recap-top-emojis" id="recapTopEmojis">
+        <h4>Top Reactions</h4>
+        <div class="top-emojis-list" id="topEmojisList">
+          <span class="muted tiny">No reactions yet</span>
+        </div>
+      </div>
+      <button class="btn primary" id="btnCloseRecap">Close</button>
+    </div>
+  </div>
+
+  <!-- Parent Info Panel -->
+  <div class="modal hidden" id="modalParentInfo">
+    <div class="modal-card parent-info-card">
+      <h2>📖 About Phone Party</h2>
+      <div class="parent-info-content">
+        <div class="info-section">
+          <h3>What is Phone Party?</h3>
+          <p>Phone Party is a music synchronization app that allows multiple phones to play music together in perfect sync. It's designed for parties and social gatherings where you want to create a massive sound experience by connecting everyone's phones.</p>
+        </div>
+        <div class="info-section">
+          <h3>🎵 How to Start and Join a Party</h3>
+          <ol>
+            <li><strong>Start a Party:</strong> Click "Create Party", choose your DJ name, optionally select music, and click "Start the party"</li>
+            <li><strong>Share the Code:</strong> Share your 6-character party code with friends</li>
+            <li><strong>Join a Party:</strong> Click "Join Party", enter the party code, and optionally add your nickname</li>
+            <li><strong>Everyone Syncs:</strong> Music plays in perfect sync across all connected devices</li>
+          </ol>
+        </div>
+        <div class="info-section">
+          <h3>🎧 Source Options</h3>
+          <ul>
+            <li><strong>Local Device:</strong> Play music files from your phone (MP3, WAV, M4A, etc.)</li>
+            <li><strong>Another App:</strong> Stream from Spotify, YouTube, or other apps (audio will sync to all devices)</li>
+            <li><strong>Microphone Mode:</strong> Broadcast live audio from your device microphone</li>
+          </ul>
+        </div>
+        <div class="info-section">
+          <h3>💬 Chat Modes</h3>
+          <ul>
+            <li><strong>OPEN:</strong> Guests can send text messages and emojis (Party Pass/Pro only)</li>
+            <li><strong>EMOJI ONLY:</strong> Guests can only send emoji reactions</li>
+            <li><strong>LOCKED:</strong> All guest messaging is disabled</li>
+          </ul>
+        </div>
+        <div class="info-section">
+          <h3>🎯 Plans & Features</h3>
+          <ul>
+            <li><strong>Free Plan:</strong> Up to 2 phones, unlimited time, audio sync only - no messaging or reactions</li>
+            <li><strong>Party Pass (£3.99):</strong> One-time unlock for one party - 2-hour session, up to 4 phones, chat + emoji reactions, DJ quick message buttons, auto party prompts</li> <!-- GBP - Party Pass pricing -->
+            <li><strong>Pro Monthly (£9.99):</strong> Unlimited time, up to 10 phones, custom messages, all reactions, no ads, priority support, advanced analytics</li> <!-- GBP - Pro Monthly pricing -->
+          </ul>
+          <p class="tiny muted">Party Pass unlocks Pro features for all guests in that party for 2 hours.</p>
+        </div>
+        <div class="info-section">
+          <h3>🏆 How Scoring Works</h3>
+          <ul>
+            <li><strong>DJ Score:</strong> Earn points based on party duration, guest engagement, and reactions</li>
+            <li><strong>Guest Points:</strong> Earn contribution points by sending reactions and messages</li>
+            <li><strong>Live Leaderboard:</strong> See top contributors in real-time during the party</li>
+          </ul>
+        </div>
+        <div class="info-section">
+          <h3>🔒 Safety & Privacy</h3>
+          <ul>
+            <li><strong>No Music Included:</strong> Users provide their own music files</li>
+            <li><strong>Local Network:</strong> Works best on home Wi-Fi or hotspots</li>
+            <li><strong>Host Controls:</strong> Party host controls playback and can moderate chat</li>
+            <li><strong>Anonymous by Default:</strong> Guests appear as "Guest 1", "Guest 2" etc.</li>
+          </ul>
+        </div>
+        <div class="info-section">
+          <h3>⚠️ Important Notes</h3>
+          <ul>
+            <li>Users are responsible for their music source and content</li>
+            <li>Best experience with same Wi-Fi network or mobile hotspot</li>
+            <li>Host can control chat permissions</li>
+            <li>Party expires after 2 hours (or when host ends it)</li>
+          </ul>
+        </div>
+      </div>
+      <button class="btn primary" id="btnCloseParentInfo">Close</button>
+    </div>
+  </div>
+
+  <!-- DJ Messages Container (global overlay) -->
+  <div id="djMessagesContainer"></div>
+
+  <!-- Authentication Views -->
+  <section class="card hidden" id="viewLogin">
+    <div class="auth-container">
+      <h2>🎧 Log In to Phone Party</h2>
+      <p class="muted">Access your DJ profile and subscription</p>
+      
+      <form id="formLogin" class="auth-form">
+        <div class="form-group">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" class="input-field" placeholder="your@email.com" required />
+        </div>
+        
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" class="input-field" placeholder="Enter password" required />
+        </div>
+        
+        <div class="auth-error hidden" id="loginError"></div>
+        
+        <button type="submit" class="btn primary full-width">Log In</button>
+      </form>
+      
+      <div class="auth-links">
+        <a href="#" id="linkForgotPassword">Forgot password?</a>
+        <span>·</span>
+        <a href="#" id="linkToSignup">Create account</a>
+        <span>·</span>
+        <a href="#" id="linkToLanding">Back</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="card hidden" id="viewSignup">
+    <div class="auth-container">
+      <h2>🎵 Create Account</h2>
+      <p class="muted">Join Phone Party and start your DJ journey</p>
+      
+      <form id="formSignup" class="auth-form">
+        <div class="form-group">
+          <label for="signupEmail">Email</label>
+          <input type="email" id="signupEmail" class="input-field" placeholder="your@email.com" required />
+        </div>
+        
+        <div class="form-group">
+          <label for="signupPassword">Password</label>
+          <input type="password" id="signupPassword" class="input-field" placeholder="At least 6 characters" required />
+        </div>
+        
+        <div class="form-group">
+          <label for="signupDjName">DJ Name (Required)</label>
+          <input type="text" id="signupDjName" class="input-field" placeholder="DJ Awesome" maxlength="30" required />
+          <small class="form-hint">This is your permanent display name shown to all guests</small>
+        </div>
+        
+        <div class="auth-error hidden" id="signupError"></div>
+        
+        <button type="submit" class="btn primary full-width">Create Account</button>
+      </form>
+      
+      <div class="auth-links">
+        <a href="#" id="linkToLogin">Already have an account?</a>
+        <span>·</span>
+        <a href="#" id="linkSignupToLanding">Back</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="card hidden" id="viewPasswordReset">
+    <div class="auth-container">
+      <h2>🔑 Reset Password</h2>
+      <p class="muted">Enter your email to receive a reset code</p>
+      
+      <form id="formPasswordResetRequest" class="auth-form">
+        <div class="form-group">
+          <label for="resetEmail">Email</label>
+          <input type="email" id="resetEmail" class="input-field" placeholder="your@email.com" required />
+        </div>
+        
+        <div class="auth-error hidden" id="resetRequestError"></div>
+        <div class="auth-success hidden" id="resetRequestSuccess"></div>
+        
+        <button type="submit" class="btn primary full-width">Send Reset Code</button>
+      </form>
+      
+      <form id="formPasswordReset" class="auth-form hidden">
+        <div class="form-group">
+          <label for="resetCode">Reset Code</label>
+          <input type="text" id="resetCode" class="input-field" placeholder="Enter 6-character code" maxlength="6" required />
+        </div>
+        
+        <div class="form-group">
+          <label for="resetNewPassword">New Password</label>
+          <input type="password" id="resetNewPassword" class="input-field" placeholder="At least 6 characters" required />
+        </div>
+        
+        <div class="auth-error hidden" id="resetError"></div>
+        
+        <button type="submit" class="btn primary full-width">Reset Password</button>
+      </form>
+      
+      <div class="auth-links">
+        <a href="#" id="linkResetToLogin">Back to Login</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- User Profile View -->
+  <section class="card hidden" id="viewProfile">
+    <div class="profile-container">
+      <div class="row space">
+        <h2>👤 My Profile</h2>
+        <button class="btn" id="btnCloseProfile">Back</button>
+      </div>
+      
+      <div class="glass-card">
+        <div class="profile-header">
+          <div class="profile-avatar" id="profileAvatar">🎧</div>
+          <div class="profile-info">
+            <h3 id="profileDjName">DJ Name</h3>
+            <div class="profile-email" id="profileEmail">email@example.com</div>
+            <div class="tier-badge" id="profileTierBadge">FREE</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="glass-card">
+        <h3>📊 Stats</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value" id="statTotalParties">0</div>
+            <div class="stat-label">Parties Hosted</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statTotalTracks">0</div>
+            <div class="stat-label">Tracks Played</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statTotalGuests">0</div>
+            <div class="stat-label">Total Guests</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="glass-card" id="djRankSection">
+        <h3>🏆 DJ Rank</h3>
+        <div class="rank-display">
+          <div class="rank-badge" id="profileRankBadge">BEGINNER</div>
+          <div class="rank-score">
+            <span id="profileScore">0</span> points
+          </div>
+        </div>
+        <div class="rank-progress">
+          <div class="rank-progress-bar">
+            <div class="rank-progress-fill" id="profileRankProgress"></div>
+          </div>
+          <div class="rank-progress-label" id="profileRankLabel">Keep hosting to rank up!</div>
+        </div>
+      </div>
+      
+      <div class="glass-card">
+        <h3>⚙️ Settings</h3>
+        <form id="formProfileUpdate">
+          <div class="form-group">
+            <label for="profileDjNameInput">DJ Name</label>
+            <input type="text" id="profileDjNameInput" class="input-field" maxlength="30" />
+          </div>
+          
+          <div class="form-group">
+            <label for="profileGuestNameInput">Guest Name (for when you join parties)</label>
+            <input type="text" id="profileGuestNameInput" class="input-field" maxlength="30" />
+          </div>
+          
+          <button type="submit" class="btn primary">Save Changes</button>
+        </form>
+      </div>
+      
+      <div class="glass-card">
+        <button class="btn danger full-width" id="btnLogout">Log Out</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       MONETIZATION SCREENS
+       ======================================================================== -->
+
+  <!-- SCREEN 1: Main Upgrade Hub -->
+  <section class="card hidden" id="viewUpgradeHub">
+    <div class="monetization-container">
+      <div class="row space">
+        <h1>🎉 Level Up Your Party</h1>
+        <button class="btn" id="btnCloseUpgradeHub">Back</button>
+      </div>
+
+      <!-- A: Current Status Card -->
+      <div class="glass-card current-status-card">
+        <div id="currentStatusFree" class="hidden">
+          <h3>Your Current Plan: FREE</h3>
+          <ul class="tier-features">
+            <li>✓ Up to 2 phones</li>
+            <li>✓ Unlimited time</li>
+            <li>✓ Audio sync</li>
+            <li>✗ No messaging</li>
+            <li>✗ No reactions</li>
+          </ul>
+        </div>
+        <div id="currentStatusPro" class="hidden">
+          <h3>🌟 You are PRO – All features unlocked</h3>
+          <p>Enjoy unlimited access to all features!</p>
+        </div>
+      </div>
+
+      <!-- B: Primary Upgrade Cards -->
+      <div class="upgrade-cards-grid">
+        <!-- CARD 1: PRO Subscription -->
+        <div class="upgrade-card pro-card">
+          <div class="upgrade-badge pro">PRO MODE</div>
+          <h2>£9.99 / month</h2> <!-- GBP - Pro Monthly pricing -->
+          <p class="upgrade-tagline">Go all out with unlimited everything</p>
+          <ul class="tier-features">
+            <li>✓ Up to 10 phones</li>
+            <li>✓ Custom messages</li>
+            <li>✓ Pro visuals</li>
+            <li>✓ No ads</li>
+          </ul>
+          <button class="btn btn-pro" id="btnPurchaseProSub">Go Pro Now</button>
+        </div>
+
+        <!-- CARD 2: Party Pass -->
+        <div class="upgrade-card party-pass-card">
+          <div class="popular-badge">Most popular</div>
+          <div class="upgrade-badge party-pass">PARTY PASS</div>
+          <h2>£3.99 (2 hours)</h2> <!-- GBP - Party Pass pricing -->
+          <p class="upgrade-tagline">Perfect for tonight's party</p>
+          <ul class="tier-features">
+            <li>✓ Up to 4 phones</li>
+            <li>✓ 2 hours duration</li>
+            <li>✓ Chat + emoji reactions</li>
+            <li>✓ DJ quick message buttons</li>
+          </ul>
+          <button class="btn btn-party-pass" id="btnPurchasePartyPass">Activate Party Pass</button>
+        </div>
+
+        <!-- CARD 3: Free Mode -->
+        <div class="upgrade-card free-card">
+          <div class="upgrade-badge free">FREE</div>
+          <h2>Free · Unlimited Time · Up to 2 Phones</h2>
+          <p class="upgrade-tagline">Keep it simple and free</p>
+          <button class="btn" id="btnContinueFree">Continue Free</button>
+        </div>
+      </div>
+
+      <!-- C: Add-Ons Store Grid -->
+      <div class="glass-card">
+        <h3>Add-ons (Boost your party)</h3>
+        <p class="muted" style="margin-bottom: 1rem;">Upgrade reactions, visuals, and DJ tools</p>
+        <div class="help-text" style="font-size: 0.85rem; color: #888; margin-bottom: 1rem; padding: 0.5rem; background: rgba(255,255,255,0.05); border-radius: 8px;">
+          <span style="margin-right: 0.5rem;">💡</span>Add-ons are optional upgrades you can apply to your account or this party.
+        </div>
+        <div class="addons-grid">
+          <button class="addon-btn" id="btnOpenVisualPacks">
+            <div class="addon-icon">🎨</div>
+            <div class="addon-name">Visual Packs</div>
+          </button>
+          <button class="addon-btn" id="btnOpenProfileUpgrades">
+            <div class="addon-icon">✨</div>
+            <div class="addon-name">Profile Upgrades</div>
+          </button>
+          <button class="addon-btn" id="btnOpenDjTitles">
+            <div class="addon-icon">🎧</div>
+            <div class="addon-name">DJ Titles</div>
+          </button>
+          <button class="addon-btn" id="btnOpenPartyExtensions">
+            <div class="addon-icon">⚡</div>
+            <div class="addon-name">Party Extensions</div>
+          </button>
+          <button class="addon-btn" id="btnOpenHypeEffects">
+            <div class="addon-icon">🔥</div>
+            <div class="addon-name">Hype Effects</div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 2: Visual Pack Store -->
+  <section class="card hidden" id="viewVisualPackStore">
+    <div class="monetization-container">
+      <div class="row space">
+        <h1>🎨 Visual Packs</h1>
+        <button class="btn" id="btnCloseVisualPacks">Back</button>
+      </div>
+
+      <p class="muted">Only one visual pack can be active at a time.</p>
+
+      <div class="store-grid">
+        <!-- Neon Pack -->
+        <div class="store-item" data-pack-id="neon-pack">
+          <div class="store-preview" style="background: linear-gradient(135deg, #5AA9FF, #8B7CFF);">
+            <div class="preview-animation neon-pulse"></div>
+          </div>
+          <h3>Neon Pack</h3>
+          <p class="store-price">£3.99</p>
+          <p class="store-description">Vibrant neon light show</p>
+          <button class="btn primary btn-buy-pack" data-pack-id="neon-pack">BUY</button>
+          <button class="btn btn-activate-pack hidden" data-pack-id="neon-pack">Set Active</button>
+        </div>
+
+        <!-- Club Pack -->
+        <div class="store-item" data-pack-id="club-pack">
+          <div class="store-preview" style="background: linear-gradient(135deg, #FF6B9D, #5AA9FF);">
+            <div class="preview-animation club-pulse"></div>
+          </div>
+          <h3>Club Pack</h3>
+          <p class="store-price">£2.99</p>
+          <p class="store-description">Underground club energy</p>
+          <button class="btn primary btn-buy-pack" data-pack-id="club-pack">BUY</button>
+          <button class="btn btn-activate-pack hidden" data-pack-id="club-pack">Set Active</button>
+        </div>
+
+        <!-- Pulse Pack -->
+        <div class="store-item" data-pack-id="pulse-pack">
+          <div class="store-preview" style="background: linear-gradient(135deg, #8B7CFF, #FF6B9D);">
+            <div class="preview-animation festival-pulse"></div>
+          </div>
+          <h3>Pulse Pack</h3>
+          <p class="store-price">£3.49</p>
+          <p class="store-description">Dynamic pulse effects</p>
+          <button class="btn primary btn-buy-pack" data-pack-id="pulse-pack">BUY</button>
+          <button class="btn btn-activate-pack hidden" data-pack-id="pulse-pack">Set Active</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 3: Profile Upgrades Store -->
+  <section class="card hidden" id="viewProfileUpgrades">
+    <div class="monetization-container">
+      <div class="row space">
+        <h1>✨ Profile Upgrades</h1>
+        <button class="btn" id="btnCloseProfileUpgrades">Back</button>
+      </div>
+
+      <p class="muted">All purchased upgrades stack and display together!</p>
+
+      <div class="store-grid">
+        <!-- Verified DJ Badge -->
+        <div class="store-item" data-upgrade-id="verified-badge">
+          <div class="store-icon">✓</div>
+          <h3>Verified DJ Badge</h3>
+          <p class="store-price">£1.99</p>
+          <p class="store-description">Show you're legit</p>
+          <button class="btn primary btn-buy-upgrade" data-upgrade-id="verified-badge">BUY</button>
+          <div class="owned-badge hidden">OWNED</div>
+        </div>
+
+        <!-- Crown Effect -->
+        <div class="store-item" data-upgrade-id="crown-effect">
+          <div class="store-icon">👑</div>
+          <h3>Crown Effect</h3>
+          <p class="store-price">£2.99</p>
+          <p class="store-description">Royalty vibes</p>
+          <button class="btn primary btn-buy-upgrade" data-upgrade-id="crown-effect">BUY</button>
+          <div class="owned-badge hidden">OWNED</div>
+        </div>
+
+        <!-- Animated Name -->
+        <div class="store-item" data-upgrade-id="animated-name">
+          <div class="store-icon">✨</div>
+          <h3>Animated Name</h3>
+          <p class="store-price">£2.49</p>
+          <p class="store-description">Make your name pop</p>
+          <button class="btn primary btn-buy-upgrade" data-upgrade-id="animated-name">BUY</button>
+          <div class="owned-badge hidden">OWNED</div>
+        </div>
+
+        <!-- Reaction Trail -->
+        <div class="store-item" data-upgrade-id="reaction-trail">
+          <div class="store-icon">🌟</div>
+          <h3>Reaction Trail</h3>
+          <p class="store-price">£1.99</p>
+          <p class="store-description">Leave your mark</p>
+          <button class="btn primary btn-buy-upgrade" data-upgrade-id="reaction-trail">BUY</button>
+          <div class="owned-badge hidden">OWNED</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 4: Party Extensions Store -->
+  <section class="card hidden" id="viewPartyExtensions">
+    <div class="monetization-container">
+      <div class="row space">
+        <h1>⚡ Party Extensions</h1>
+        <button class="btn" id="btnClosePartyExtensions">Back</button>
+      </div>
+
+      <p class="muted">Extensions apply instantly to your current party session!</p>
+
+      <div class="store-grid">
+        <!-- Add 30 Minutes -->
+        <div class="store-item">
+          <div class="store-icon">⏰</div>
+          <h3>Add 30 Minutes</h3>
+          <p class="store-price">£0.99</p>
+          <p class="store-description">Keep the party going</p>
+          <button class="btn primary btn-buy-extension" data-extension-id="time-30">Add Time</button>
+        </div>
+
+        <!-- Add 5 More Phones -->
+        <div class="store-item">
+          <div class="store-icon">📱</div>
+          <h3>Add 5 More Phones</h3>
+          <p class="store-price">£1.49</p>
+          <p class="store-description">Bring more friends</p>
+          <button class="btn primary btn-buy-extension" data-extension-id="phones-5">Add Phones</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 5: DJ Title Store -->
+  <section class="card hidden" id="viewDjTitleStore">
+    <div class="monetization-container">
+      <div class="row space">
+        <h1>🎧 DJ Title Store</h1>
+        <button class="btn" id="btnCloseDjTitles">Back</button>
+      </div>
+
+      <p class="muted">Only one title can be active at a time. Switch anytime!</p>
+
+      <div class="store-grid">
+        <!-- Rising DJ -->
+        <div class="store-item" data-title-id="rising-dj">
+          <div class="title-display">Rising DJ</div>
+          <p class="store-price">£0.99</p>
+          <p class="store-description">Starting your journey</p>
+          <button class="btn primary btn-buy-title" data-title-id="rising-dj">BUY</button>
+          <button class="btn btn-activate-title hidden" data-title-id="rising-dj">Activate</button>
+        </div>
+
+        <!-- Club DJ -->
+        <div class="store-item" data-title-id="club-dj">
+          <div class="title-display">Club DJ</div>
+          <p class="store-price">£1.49</p>
+          <p class="store-description">Making moves</p>
+          <button class="btn primary btn-buy-title" data-title-id="club-dj">BUY</button>
+          <button class="btn btn-activate-title hidden" data-title-id="club-dj">Activate</button>
+        </div>
+
+        <!-- Superstar DJ -->
+        <div class="store-item" data-title-id="superstar-dj">
+          <div class="title-display">Superstar DJ</div>
+          <p class="store-price">£2.49</p>
+          <p class="store-description">On top of the scene</p>
+          <button class="btn primary btn-buy-title" data-title-id="superstar-dj">BUY</button>
+          <button class="btn btn-activate-title hidden" data-title-id="superstar-dj">Activate</button>
+        </div>
+
+        <!-- Legend DJ -->
+        <div class="store-item" data-title-id="legend-dj">
+          <div class="title-display">Legend DJ</div>
+          <p class="store-price">£3.49</p>
+          <p class="store-description">Hall of fame status</p>
+          <button class="btn primary btn-buy-title" data-title-id="legend-dj">BUY</button>
+          <button class="btn btn-activate-title hidden" data-title-id="legend-dj">Activate</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREEN 6: Hype Effects Store -->
+  <section class="card hidden" id="viewHypeEffects">
+    <div class="monetization-container">
+      <div class="row space">
+        <h1>🔥 Hype Effects</h1>
+        <button class="btn" id="btnCloseHypeEffects">Back</button>
+      </div>
+
+      <p class="muted">Consumable effects that trigger epic moments in your party!</p>
+
+      <div class="store-grid">
+        <!-- Confetti Blast -->
+        <div class="store-item" data-hype-id="confetti-blast">
+          <div class="store-icon">🎊</div>
+          <h3>Confetti Blast</h3>
+          <p class="store-price">£0.49</p>
+          <p class="store-description">Epic confetti explosion</p>
+          <button class="btn primary btn-buy-hype" data-hype-id="confetti-blast">BUY & USE</button>
+          <div class="hype-quantity hidden" data-hype-id="confetti-blast">Owned: <span>0</span></div>
+        </div>
+
+        <!-- Laser Show -->
+        <div class="store-item" data-hype-id="laser-show">
+          <div class="store-icon">⚡</div>
+          <h3>Laser Show</h3>
+          <p class="store-price">£0.99</p>
+          <p class="store-description">Synchronized laser effects</p>
+          <button class="btn primary btn-buy-hype" data-hype-id="laser-show">BUY & USE</button>
+          <div class="hype-quantity hidden" data-hype-id="laser-show">Owned: <span>0</span></div>
+        </div>
+
+        <!-- Crowd Roar -->
+        <div class="store-item" data-hype-id="crowd-roar">
+          <div class="store-icon">📣</div>
+          <h3>Crowd Roar</h3>
+          <p class="store-price">£0.79</p>
+          <p class="store-description">Massive crowd cheer sound</p>
+          <button class="btn primary btn-buy-hype" data-hype-id="crowd-roar">BUY & USE</button>
+          <div class="hype-quantity hidden" data-hype-id="crowd-roar">Owned: <span>0</span></div>
+        </div>
+
+        <!-- Fireworks -->
+        <div class="store-item" data-hype-id="fireworks">
+          <div class="store-icon">🎆</div>
+          <h3>Fireworks</h3>
+          <p class="store-price">£1.49</p>
+          <p class="store-description">Spectacular fireworks display</p>
+          <button class="btn primary btn-buy-hype" data-hype-id="fireworks">BUY & USE</button>
+          <div class="hype-quantity hidden" data-hype-id="fireworks">Owned: <span>0</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Leaderboard Screen -->
+  <section class="card hidden" id="viewLeaderboard">
+    <h1>🏆 LEADERBOARD</h1>
+    <p class="muted">Top DJs and Guests</p>
+    
+    <!-- Toggle Tabs -->
+    <div class="leaderboard-tabs">
+      <button class="btn secondary leaderboard-tab active" id="btnTabDjs">Top DJs</button>
+      <button class="btn secondary leaderboard-tab" id="btnTabGuests">Top Guests</button>
+    </div>
+    
+    <!-- Top DJs List -->
+    <div class="leaderboard-section" id="leaderboardDjs">
+      <div class="loading-state" id="loadingDjs">Loading...</div>
+      <div class="error-state hidden" id="errorDjs">Failed to load leaderboard</div>
+      <div class="leaderboard-list" id="djsList"></div>
+    </div>
+    
+    <!-- Top Guests List -->
+    <div class="leaderboard-section hidden" id="leaderboardGuests">
+      <div class="loading-state" id="loadingGuests">Loading...</div>
+      <div class="error-state hidden" id="errorGuests">Failed to load leaderboard</div>
+      <div class="leaderboard-list" id="guestsList"></div>
+    </div>
+    
+    <button class="btn" id="btnBackFromLeaderboard">Back</button>
+  </section>
+
+  <!-- My Profile Screen -->
+  <section class="card hidden" id="viewMyProfile">
+    <h1>👤 MY PROFILE</h1>
+    
+    <div class="loading-state" id="loadingProfile">Loading...</div>
+    <div class="error-state hidden" id="errorProfile">Failed to load profile</div>
+    
+    <div class="profile-content hidden" id="profileContent">
+      <!-- Profile Header -->
+      <div class="profile-header">
+        <h2 id="profileDjName">Guest DJ</h2>
+        <div class="profile-tier" id="profileTier">FREE</div>
+      </div>
+      
+      <!-- DJ Stats -->
+      <div class="profile-section">
+        <h3>DJ Stats</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-label">DJ Score</div>
+            <div class="stat-value" id="profileDjScore">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">DJ Rank</div>
+            <div class="stat-value" id="profileDjRank">Bedroom DJ</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Profile Upgrades -->
+      <div class="profile-section">
+        <h3>Profile Upgrades</h3>
+        <div class="upgrades-list">
+          <div class="upgrade-item">
+            <span>Verified Badge</span>
+            <span class="upgrade-status" id="upgradeVerifiedBadge">❌</span>
+          </div>
+          <div class="upgrade-item">
+            <span>Crown Effect</span>
+            <span class="upgrade-status" id="upgradeCrownEffect">❌</span>
+          </div>
+          <div class="upgrade-item">
+            <span>Animated Name</span>
+            <span class="upgrade-status" id="upgradeAnimatedName">❌</span>
+          </div>
+          <div class="upgrade-item">
+            <span>Reaction Trail</span>
+            <span class="upgrade-status" id="upgradeReactionTrail">❌</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Active Customizations -->
+      <div class="profile-section">
+        <h3>Active Customizations</h3>
+        <div class="active-items">
+          <div class="active-item">
+            <span>Visual Pack:</span>
+            <span id="profileVisualPack">None</span>
+          </div>
+          <div class="active-item">
+            <span>Title:</span>
+            <span id="profileTitle">None</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Entitlements -->
+      <div class="profile-section">
+        <h3>Owned Items</h3>
+        <div class="entitlements-list" id="profileEntitlements">
+          <p class="muted">No items owned yet</p>
+        </div>
+      </div>
+    </div>
+    
+    <button class="btn" id="btnBackFromProfile">Back</button>
+  </section>
+
+  <!-- SCREEN 6: Checkout Flow -->
+  <div class="modal hidden" id="modalCheckout">
+    <div class="modal-content checkout-modal">
+      <!-- Step 1: Confirmation -->
+      <div class="checkout-step" id="checkoutConfirmation">
+        <h2>Confirm Purchase</h2>
+        <div class="checkout-item-preview" id="checkoutItemPreview">
+          <!-- Filled dynamically -->
+        </div>
+        <div class="checkout-actions">
+          <button class="btn primary" id="btnConfirmPurchase">Continue to Payment</button>
+          <button class="btn" id="btnCancelCheckout">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Payment Entry -->
+      <div class="checkout-step hidden" id="checkoutPayment">
+        <h2>Payment Details</h2>
+        <p class="muted">This is a demo - no real payment is processed</p>
+        <div class="form-group">
+          <label>Card Number</label>
+          <input type="text" class="input-field" placeholder="1234 5678 9012 3456" maxlength="19" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Expiry</label>
+            <input type="text" class="input-field" placeholder="MM/YY" maxlength="5" />
+          </div>
+          <div class="form-group">
+            <label>CVV</label>
+            <input type="text" class="input-field" placeholder="123" maxlength="3" />
+          </div>
+        </div>
+        <div class="checkout-actions">
+          <button class="btn primary" id="btnProcessPayment">Process Payment</button>
+          <button class="btn" id="btnBackToConfirm">Back</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Success Screen -->
+      <div class="checkout-step hidden" id="checkoutSuccess">
+        <div class="success-icon">✓</div>
+        <h2>Upgrade Activated</h2>
+        <p class="success-message">Ready to Use Now</p>
+        <button class="btn primary" id="btnCloseCheckoutSuccess">Awesome!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upsell Modal (reusable for various upsell locations) -->
+  <div class="modal hidden" id="modalUpsell">
+    <div class="modal-content upsell-modal">
+      <h2 id="upsellTitle">Unlock Feature</h2>
+      <p id="upsellMessage">Upgrade to unlock this feature!</p>
+      <div class="upsell-actions">
+        <button class="btn primary" id="btnUpsellUpgrade">Upgrade Now</button>
+        <button class="btn" id="btnUpsellClose">Maybe Later</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Referral Modal -->
+  <div class="modal hidden" id="modalReferral">
+    <div class="modal-content">
+      <button class="btn-close-modal" id="btnCloseReferralModal">✕</button>
+      <h2>🎁 Share & Earn Rewards</h2>
+      <p class="muted">Invite friends to join Phone Party and earn free Pro time!</p>
+      
+      <div class="referral-info-card">
+        <div class="referral-stat">
+          <div class="stat-value" id="referralTotalCount">0</div>
+          <div class="stat-label">Friends Invited</div>
+        </div>
+        <div class="referral-stat">
+          <div class="stat-value" id="referralPaidCount">0</div>
+          <div class="stat-label">Paid Conversions</div>
+        </div>
+        <div class="referral-stat">
+          <div class="stat-value" id="referralRewardsEarned">0</div>
+          <div class="stat-label">Free Months Earned</div>
+        </div>
+      </div>
+      
+      <div class="referral-progress-card">
+        <div class="progress-header">
+          <span>Progress to Next Reward</span>
+          <span id="referralProgress">0/5</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="referralProgressBar" style="width: 0%"></div>
+        </div>
+        <div class="tiny muted">5 paid referrals = 1 free month of Pro</div>
+      </div>
+      
+      <div class="referral-code-card">
+        <div class="lbl">Your Referral Code</div>
+        <div class="referral-code-display" id="referralCodeDisplay">LOADING...</div>
+        <input type="text" id="referralLinkInput" class="input-field" readonly style="margin-top: 1rem;" />
+        <div class="referral-actions">
+          <button class="btn primary" id="btnCopyReferralLink">📋 Copy Link</button>
+          <button class="btn" id="btnShareReferralLink">📤 Share</button>
+        </div>
+      </div>
+      
+      <div class="tiny muted" style="text-align: center; margin-top: 1rem;">
+        Your friends get the best party app, you get free Pro time. Win-win!
+      </div>
+    </div>
+  </div>
+
+  <!-- Sync Debug Panel (Toggleable) -->
+  <div class="sync-debug-panel hidden" id="syncDebugPanel">
+    <div class="debug-header">
+      <span class="debug-title">🔍 Sync Debug</span>
+      <button class="btn-close-debug" id="btnCloseDebug">✕</button>
+    </div>
+    <div class="debug-content">
+      <div class="debug-row">
+        <span class="debug-label">Drift:</span>
+        <span class="debug-value" id="debugDrift">0ms</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">RTT:</span>
+        <span class="debug-value" id="debugRTT">0ms</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">Offset:</span>
+        <span class="debug-value" id="debugOffset">0ms</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">Correction:</span>
+        <span class="debug-value" id="debugCorrection">None</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">Sync Quality:</span>
+        <span class="debug-value" id="debugSyncQuality">Good</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">Track ID:</span>
+        <span class="debug-value" id="debugTrackId">-</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">Corrections:</span>
+        <span class="debug-value" id="debugCorrectionsCount">0</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="auth-utils.js"></script>
+  <script src="auth.js"></script>
+  <script src="payment-client.js"></script>
+  <script src="visual-stage.js"></script>
+  <script src="moderation.js"></script>
+  <script src="network-accessibility.js"></script>
+  <script src="qr-deeplink.js"></script>
+  
+  <!-- Production Upgrade Modules -->
+  <script src="sync-status-ui.js"></script>
+  <script src="referral-ui.js"></script>
+  
+  <!-- SyncSpeaker Ultimate AmpSync+ Engine -->
+  <script src="sync-client.js"></script>
+  
+  <!-- Media Session API for Background Audio -->
+  <script src="media-session.js"></script>
+  
+  <!-- Sentry Error Tracking (Production Only) -->
+  <script>
+    // Only load Sentry in production
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      // Check if SENTRY_DSN is configured via meta tag or environment
+      const sentryDsn = document.querySelector('meta[name="sentry-dsn"]')?.content;
+      if (sentryDsn) {
+        // Load Sentry SDK (using floating version /7/ for automatic patch updates)
+        // Note: This auto-updates to latest v7.x for security patches while staying on major version 7
+        const script = document.createElement('script');
+        script.src = 'https://browser.sentry-cdn.com/7/bundle.min.js';
+        script.crossOrigin = 'anonymous';
+        script.onload = function() {
+          if (window.Sentry) {
+            window.Sentry.init({
+              dsn: sentryDsn,
+              environment: 'production',
+              integrations: [
+                new Sentry.BrowserTracing(),
+                new Sentry.Replay({
+                  maskAllText: true,
+                  blockAllMedia: true,
+                }),
+              ],
+              // Performance Monitoring
+              tracesSampleRate: 0.1, // Capture 10% of transactions
+              // Session Replay
+              replaysSessionSampleRate: 0.1, // Sample 10% of sessions
+              replaysOnErrorSampleRate: 1.0, // Sample 100% of sessions with errors
+            });
+            console.log('[Sentry] Error tracking initialized');
+          }
+        };
+        document.head.appendChild(script);
+      }
+    }
+  </script>
+  
+  <script src="app.js"></script>
+  
+  <!-- Dev Navigation Panel (only visible in dev mode) -->
+  <div id="devNavigationPanel" class="dev-nav-panel hidden">
+    <div class="dev-nav-header">
+      <h3>🛠️ Dev Navigation</h3>
+      <button id="btnCloseDevNav" class="dev-nav-close">✕</button>
+    </div>
+    <div class="dev-nav-content">
+      <p class="dev-nav-subtitle">Quick access to all pages:</p>
+      <div class="dev-nav-grid">
+        <button class="dev-nav-btn" data-view="viewLanding">🏠 Landing</button>
+        <button class="dev-nav-btn" data-view="viewChooseTier">🎯 Choose Tier</button>
+        <button class="dev-nav-btn" data-view="viewAccountCreation">👤 Create Account</button>
+        <button class="dev-nav-btn" data-view="viewHome">🏡 Home</button>
+        <button class="dev-nav-btn" data-view="viewParty">🎉 Party</button>
+        <button class="dev-nav-btn" data-view="viewPayment">💳 Payment</button>
+        <button class="dev-nav-btn" data-view="viewGuest">🎧 Guest</button>
+        <button class="dev-nav-btn" data-view="viewLogin">🔐 Login</button>
+        <button class="dev-nav-btn" data-view="viewSignup">📝 Signup</button>
+        <button class="dev-nav-btn" data-view="viewPasswordReset">🔑 Reset Password</button>
+        <button class="dev-nav-btn" data-view="viewProfile">👨 Profile</button>
+        <button class="dev-nav-btn" data-view="viewUpgradeHub">⭐ Upgrade Hub</button>
+        <button class="dev-nav-btn" data-view="viewVisualPackStore">🎨 Visual Packs</button>
+        <button class="dev-nav-btn" data-view="viewProfileUpgrades">✨ Profile Upgrades</button>
+        <button class="dev-nav-btn" data-view="viewPartyExtensions">🎊 Party Extensions</button>
+        <button class="dev-nav-btn" data-view="viewDjTitleStore">🎤 DJ Titles</button>
+        <button class="dev-nav-btn" data-view="viewLeaderboard">🏆 Leaderboard</button>
+        <button class="dev-nav-btn" data-view="viewMyProfile">📊 My Profile</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Service Worker Registration for PWA -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then((registration) => {
+            console.log('[PWA] Service Worker registered:', registration.scope);
+            
+            // Check for updates on visibility change (when user returns to app)
+            document.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'visible') {
+                registration.update();
+              }
+            });
+            
+            // Also check periodically, but less frequently (every 15 minutes)
+            setInterval(() => {
+              registration.update();
+            }, 15 * 60 * 1000); // 15 minutes
+            
+            // Listen for updates
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New service worker available
+                  console.log('[PWA] New version available! Reload to update.');
+                  // Optionally show a notification to the user
+                  if (confirm('A new version of Phone Party is available. Reload to update?')) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    window.location.reload();
+                  }
+                }
+              });
+            });
+          })
+          .catch((error) => {
+            console.log('[PWA] Service Worker registration failed:', error);
+          });
+      });
+      
+      // Handle service worker updates
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    }
+  </script>
+</body>
+</html>
