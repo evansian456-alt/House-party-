@@ -547,6 +547,131 @@ describe('WebSocket OFFICIAL_APP_SYNC_SELECT and TIME_PING', () => {
     }, 8000);
   }, 15000);
 
+  // -- Section 8c: PRO tier broadcast --
+
+  it('PRO tier host: OFFICIAL_APP_SYNC_SELECT broadcasts TRACK_SELECTED to all members', done => {
+    const hostWs = new WebSocket(wsUrl);
+    let guestWs;
+    let resolved = false;
+    let partyCode;
+
+    hostWs.once('open', () => {
+      hostWs.send(JSON.stringify({ t: 'CREATE', djName: 'ProDJ', source: 'local' }));
+    });
+
+    hostWs.on('message', data => {
+      if (resolved) return;
+      const msg = JSON.parse(data.toString());
+
+      if (msg.t === 'CREATED') {
+        partyCode = msg.code;
+        const inMemParty = serverModule.parties.get(partyCode);
+        if (inMemParty) inMemParty.tier = 'PRO';
+
+        guestWs = new WebSocket(wsUrl);
+        guestWs.once('open', () => {
+          guestWs.send(JSON.stringify({ t: 'JOIN', code: partyCode, name: 'GuestPro' }));
+        });
+
+        guestWs.on('message', guestData => {
+          if (resolved) return;
+          const guestMsg = JSON.parse(guestData.toString());
+          if (guestMsg.t === 'JOINED') {
+            hostWs.send(JSON.stringify({
+              t: 'OFFICIAL_APP_SYNC_SELECT',
+              platform: 'spotify',
+              trackRef: 'spotify:track:4uLU6hMCjMI75M1A2tKUQC',
+              positionSeconds: 0,
+              playing: true
+            }));
+          } else if (guestMsg.t === 'TRACK_SELECTED' && guestMsg.mode === 'OFFICIAL_APP_SYNC') {
+            resolved = true;
+            expect(guestMsg.platform).toBe('spotify');
+            expect(guestMsg.trackRef).toBe('spotify:track:4uLU6hMCjMI75M1A2tKUQC');
+            hostWs.close();
+            guestWs.close();
+            done();
+          }
+        });
+
+        guestWs.once('error', err => {
+          if (!resolved) { resolved = true; hostWs.close(); guestWs.close(); done(err); }
+        });
+      }
+    });
+
+    hostWs.once('error', err => { if (!resolved) { resolved = true; hostWs.close(); if (guestWs) guestWs.close(); done(err); } });
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        hostWs.close();
+        if (guestWs) guestWs.close();
+        done(new Error('Timeout: expected TRACK_SELECTED broadcast for PRO tier'));
+      }
+    }, 8000);
+  }, 15000);
+
+  // -- Section 8d: Guest denied --
+
+  it('Guest cannot send OFFICIAL_APP_SYNC_SELECT (returns UNAUTHORIZED error)', done => {
+    const hostWs = new WebSocket(wsUrl);
+    let guestWs;
+    let resolved = false;
+    let partyCode;
+
+    hostWs.once('open', () => {
+      hostWs.send(JSON.stringify({ t: 'CREATE', djName: 'HostForGuestTest', source: 'local' }));
+    });
+
+    hostWs.on('message', data => {
+      if (resolved) return;
+      const msg = JSON.parse(data.toString());
+      if (msg.t === 'CREATED') {
+        partyCode = msg.code;
+        const inMemParty = serverModule.parties.get(partyCode);
+        if (inMemParty) inMemParty.tier = 'PARTY_PASS';
+
+        guestWs = new WebSocket(wsUrl);
+        guestWs.once('open', () => {
+          guestWs.send(JSON.stringify({ t: 'JOIN', code: partyCode, name: 'GuestUser' }));
+        });
+
+        guestWs.on('message', guestData => {
+          if (resolved) return;
+          const guestMsg = JSON.parse(guestData.toString());
+          if (guestMsg.t === 'JOINED') {
+            guestWs.send(JSON.stringify({
+              t: 'OFFICIAL_APP_SYNC_SELECT',
+              platform: 'youtube',
+              trackRef: 'dQw4w9WgXcQ',
+              positionSeconds: 0,
+              playing: true
+            }));
+          } else if (guestMsg.t === 'ERROR' && guestMsg.errorType === 'UNAUTHORIZED') {
+            resolved = true;
+            hostWs.close();
+            guestWs.close();
+            done();
+          }
+        });
+
+        guestWs.once('error', err => {
+          if (!resolved) { resolved = true; hostWs.close(); guestWs.close(); done(err); }
+        });
+      }
+    });
+
+    hostWs.once('error', err => { if (!resolved) { resolved = true; hostWs.close(); if (guestWs) guestWs.close(); done(err); } });
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        hostWs.close();
+        if (guestWs) guestWs.close();
+        done(new Error('Timeout: expected UNAUTHORIZED error for guest OFFICIAL_APP_SYNC_SELECT'));
+      }
+    }, 8000);
+  }, 15000);
+
   // -- Section 9a: TIME_PING → TIME_PONG --
 
   it('TIME_PING returns TIME_PONG with correct shape', done => {
