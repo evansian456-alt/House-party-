@@ -616,6 +616,11 @@ describe('Server HTTP Endpoints', () => {
       expect(response.status).toBe(200);
       expect(response.headers['content-type']).toMatch(/html/);
     });
+
+    it('should include no-cache header', async () => {
+      const response = await request(app).get('/');
+      expect(response.headers['cache-control']).toMatch(/no-cache/);
+    });
   });
 
   describe('Static Files', () => {
@@ -625,10 +630,72 @@ describe('Server HTTP Endpoints', () => {
       expect(response.headers['content-type']).toMatch(/javascript/);
     });
 
+    it('should serve app.js with no-cache header', async () => {
+      const response = await request(app).get('/app.js');
+      expect(response.headers['cache-control']).toMatch(/no-cache/);
+    });
+
+    it('should serve service-worker.js', async () => {
+      const response = await request(app).get('/service-worker.js');
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/javascript/);
+    });
+
+    it('should serve service-worker.js with no-cache header', async () => {
+      const response = await request(app).get('/service-worker.js');
+      expect(response.headers['cache-control']).toMatch(/no-cache/);
+    });
+
+    it('should serve manifest.json', async () => {
+      const response = await request(app).get('/manifest.json');
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/json/);
+    });
+
     it('should serve styles.css', async () => {
       const response = await request(app).get('/styles.css');
       expect(response.status).toBe(200);
       expect(response.headers['content-type']).toMatch(/css/);
+    });
+  });
+
+  describe('GET /__version', () => {
+    it('should return 200 with JSON', async () => {
+      const response = await request(app).get('/__version');
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/json/);
+    });
+
+    it('should include appVersion', async () => {
+      const response = await request(app).get('/__version');
+      expect(typeof response.body.appVersion).toBe('string');
+      expect(response.body.appVersion.length).toBeGreaterThan(0);
+    });
+
+    it('should include changerVersion', async () => {
+      const response = await request(app).get('/__version');
+      expect(typeof response.body.changerVersion).toBe('string');
+      expect(response.body.changerVersion.length).toBeGreaterThan(0);
+    });
+
+    it('should include instanceId', async () => {
+      const response = await request(app).get('/__version');
+      expect(typeof response.body.instanceId).toBe('string');
+    });
+
+    it('should include nodeEnv', async () => {
+      const response = await request(app).get('/__version');
+      expect(typeof response.body.nodeEnv).toBe('string');
+    });
+
+    it('should have no-cache header', async () => {
+      const response = await request(app).get('/__version');
+      expect(response.headers['cache-control']).toMatch(/no-cache/);
+    });
+
+    it('should have X-Changer-Version response header', async () => {
+      const response = await request(app).get('/__version');
+      expect(response.headers['x-changer-version']).toBeDefined();
     });
   });
 });
