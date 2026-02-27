@@ -57,6 +57,12 @@ const { initRateLimiter, checkRateLimit, clearClientRateLimit } = require('./rat
 // Import entitlement validator for strict tier enforcement
 const { validateSessionCreation, validateSessionJoin, validateFeatureAccess, getTierLimits, isPartyPassActive: checkPartyPassActive } = require('./entitlement-validator');
 
+// Import tier policy (single source of truth for tier limits)
+const { isPaidForOfficialAppSync: tierPolicyIsPaidForOfficialAppSync, getPolicyForTier } = require('./tier-policy');
+
+// Import platform normalizer for Official App Sync track references
+const { normalizePlatformTrackRef } = require('./platform-normalizer');
+
 // Import production services
 const { MetricsService } = require('./metrics-service');
 const { ReferralSystem } = require('./referral-system');
@@ -4733,6 +4739,32 @@ app.get("/api/party/:code/members", async (req, res) => {
   });
 });
 
+// GET /api/party/:code/limits - Get party tier limits and feature access
+app.get("/api/party/:code/limits", async (req, res) => {
+  const code = normalizePartyCode(req.params.code);
+  if (!code) return res.status(400).json({ error: 'Invalid party code' });
+
+  let partyData;
+  try {
+    partyData = parties.get(code) || await getPartyFromRedis(code) || getPartyFromFallback(code);
+  } catch (_) {
+    partyData = getPartyFromFallback(code);
+  }
+
+  if (!partyData) return res.status(404).json({ error: 'Party not found' });
+
+  const tier = partyData.tier || 'FREE';
+  const policy = getPolicyForTier(tier);
+
+  return res.json({
+    tier,
+    maxDevices: policy.maxDevices,
+    maxSessionMinutes: policy.maxSessionMinutes,
+    uploadsAllowed: policy.uploadsAllowed,
+    isPaidForOfficialAppSync: isPaidForOfficialAppSyncParty(partyData)
+  });
+});
+
 // Get party scoreboard (live or historical)
 app.get("/api/party/:code/scoreboard", async (req, res) => {
   const timestamp = new Date().toISOString();
@@ -5492,6 +5524,9 @@ async function handleMessage(ws, msg) {
     case "MESSAGE_ACK":
       handleMessageAck(ws, sanitizedMsg);
       break;
+    case "OFFICIAL_APP_SYNC_SELECT":
+      handleOfficialAppSyncSelect(ws, sanitizedMsg);
+      break;
     default: {
       // Cap the echoed type to prevent log/response bloat
       const safeType = String(sanitizedMsg.t).substring(0, 50);
@@ -5515,6 +5550,31 @@ function handleTimePing(ws, msg) {
     pingId: msg.pingId
   };
   safeSend(ws, JSON.stringify(response));
+
+  // OFFICIAL APP SYNC: check for drift and send SYNC_CORRECTION if needed
+  const client = clients.get(ws);
+  if (
+    client && client.party &&
+    msg.localPositionSeconds !== undefined &&
+    msg.trackRef !== undefined
+  ) {
+    const party = parties.get(client.party);
+    if (party && party.officialAppSync && party.officialAppSync.playing) {
+      const sync = party.officialAppSync;
+      if (sync.trackRef === msg.trackRef && sync.playStartedAtMs) {
+        const targetPositionSeconds = (serverNowMs - sync.playStartedAtMs) / 1000;
+        const drift = Math.abs((msg.localPositionSeconds || 0) - targetPositionSeconds);
+        const DRIFT_THRESHOLD_SECONDS = 0.5;
+        if (drift > DRIFT_THRESHOLD_SECONDS) {
+          safeSend(ws, JSON.stringify({
+            t: 'SYNC_CORRECTION',
+            serverTimestampMs: serverNowMs,
+            targetPositionSeconds
+          }));
+        }
+      }
+    }
+  }
 }
 
 // Handle CLOCK_PING for advanced clock synchronization
@@ -6861,10 +6921,112 @@ function handleHostTrackSelected(ws, msg) {
   });
 }
 
+/**
+ * Check whether a party's tier grants access to Official App Sync mode.
+ * Checks tier string and also falls back to checking partyPassExpiresAt.
+ * @param {Object} partyData - party object
+ * @returns {boolean}
+ */
+function isPaidForOfficialAppSyncParty(partyData) {
+  if (!partyData) return false;
+  const tier = partyData.tier;
+  if (tierPolicyIsPaidForOfficialAppSync(tier)) return true;
+  // Fallback: legacy partyPassExpiresAt without explicit tier field
+  return isPartyPassActive(partyData);
+}
+
+/**
+ * Handle OFFICIAL_APP_SYNC_SELECT from host:
+ *   { t: "OFFICIAL_APP_SYNC_SELECT", platform, trackRef, positionSeconds?, playing? }
+ *
+ * Validates tier, normalizes trackRef, stores state, broadcasts TRACK_SELECTED.
+ */
+function handleOfficialAppSyncSelect(ws, msg) {
+  const client = clients.get(ws);
+  if (!client || !client.party) return;
+
+  // SECURITY: Only the host can select a track
+  const authCheck = validateHostAuthority(ws, clients, parties, client.party, 'official app sync select');
+  if (!authCheck.valid) {
+    safeSend(ws, JSON.stringify(createUnauthorizedError('official app sync select', authCheck.error)));
+    return;
+  }
+
+  const party = authCheck.party;
+
+  // TIER CHECK: Official App Sync is ONLY for paid tiers
+  if (!isPaidForOfficialAppSyncParty(party)) {
+    safeSend(ws, JSON.stringify({
+      t: 'ERROR',
+      errorType: 'TIER_NOT_PAID',
+      message: 'Official App Sync is only available for Party Pass and Pro Monthly subscribers.'
+    }));
+    return;
+  }
+
+  const platform = (msg.platform || '').toLowerCase();
+  const trackRef = msg.trackRef || '';
+  const positionSeconds = typeof msg.positionSeconds === 'number' ? msg.positionSeconds : 0;
+  const playing = msg.playing !== false; // default true
+
+  if (!platform || !trackRef) {
+    safeSend(ws, JSON.stringify({
+      t: 'ERROR',
+      errorType: 'INVALID_PAYLOAD',
+      message: 'platform and trackRef are required for OFFICIAL_APP_SYNC_SELECT'
+    }));
+    return;
+  }
+
+  // Normalize trackRef per platform
+  let normalizedRef;
+  try {
+    normalizedRef = normalizePlatformTrackRef(platform, trackRef);
+  } catch (err) {
+    safeSend(ws, JSON.stringify({
+      t: 'ERROR',
+      errorType: 'INVALID_TRACK_REF',
+      message: err.message
+    }));
+    return;
+  }
+
+  const serverTimestampMs = Date.now();
+
+  // Store Official App Sync state on the party
+  party.officialAppSync = {
+    platform,
+    trackRef: normalizedRef,
+    playStartedAtMs: playing ? serverTimestampMs - positionSeconds * 1000 : null,
+    seekOffsetSeconds: positionSeconds,
+    playing,
+    serverTimestampMs
+  };
+
+  // Broadcast TRACK_SELECTED to ALL party members (including host)
+  const broadcast = JSON.stringify({
+    t: 'TRACK_SELECTED',
+    mode: 'OFFICIAL_APP_SYNC',
+    platform,
+    trackRef: normalizedRef,
+    serverTimestampMs,
+    positionSeconds,
+    playing
+  });
+
+  party.members.forEach(m => {
+    if (m.ws.readyState === WebSocket.OPEN) {
+      m.ws.send(broadcast);
+    }
+  });
+
+  console.log(`[OfficialAppSync] Track selected: platform=${platform} trackRef=${normalizedRef} party=${client.party}`);
+}
+
 function handleHostNextTrackQueued(ws, msg) {
   const client = clients.get(ws);
   if (!client || !client.party) return;
-  
+
   // SECURITY: Validate host authority using strict server-side check
   const authCheck = validateHostAuthority(ws, clients, parties, client.party, 'queue track');
   if (!authCheck.valid) {

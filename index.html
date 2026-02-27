@@ -600,6 +600,36 @@
 
       <div class="line"></div>
 
+      <!-- Official App Sync Section (Party Pass + Pro Only) -->
+      <div class="box hidden" id="officialAppSyncSection">
+        <div class="row space">
+          <h3>🎵 Official App Sync</h3>
+          <span class="badge" style="background:linear-gradient(135deg,#a855f7,#6366f1);color:#fff;font-size:0.7rem;">PAID</span>
+        </div>
+        <p class="tiny muted" style="margin-bottom:0.75rem">
+          Pick a track on YouTube, Spotify, or SoundCloud — everyone in the party plays it in sync via the official app.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:0.5rem;">
+          <select class="input" id="syncPlatformSelect" style="max-width:200px">
+            <option value="youtube">YouTube</option>
+            <option value="spotify">Spotify</option>
+            <option value="soundcloud">SoundCloud</option>
+          </select>
+          <input class="input" id="syncTrackRefInput" placeholder="Paste URL or track ID / URI" style="max-width:400px" />
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <button class="btn primary" id="btnSyncTrack">🎵 Sync Track</button>
+            <span class="tiny muted" id="syncTrackStatus"></span>
+          </div>
+        </div>
+        <div class="hidden" id="syncNowPlayingBox" style="margin-top:0.75rem;padding:0.5rem;background:rgba(255,255,255,0.06);border-radius:8px;">
+          <div class="tiny muted">Now syncing:</div>
+          <div id="syncNowPlayingPlatform" style="font-size:0.85rem;font-weight:600;"></div>
+          <div id="syncNowPlayingRef" class="tiny muted" style="word-break:break-all;"></div>
+        </div>
+      </div>
+
+      <div class="line"></div>
+
       <div class="row space">
         <h3>Friends connected</h3>
         <div class="row gap">
