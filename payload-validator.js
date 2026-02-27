@@ -196,10 +196,12 @@ const PAYLOAD_SCHEMAS = {
   
   TIME_PING: {
     required: ['clientNowMs'],
-    optional: ['pingId'],
+    optional: ['pingId', 'localPositionSeconds', 'trackRef'],
     types: {
       clientNowMs: 'number',
-      pingId: 'number'
+      pingId: 'number',
+      localPositionSeconds: 'number',
+      trackRef: 'string'
     }
   },
   
@@ -210,6 +212,17 @@ const PAYLOAD_SCHEMAS = {
       drift: 'string',
       trackId: 'string',
       details: 'string'
+    }
+  },
+
+  OFFICIAL_APP_SYNC_SELECT: {
+    required: ['platform', 'trackRef'],
+    optional: ['positionSeconds', 'playing'],
+    types: {
+      platform: 'string',
+      trackRef: 'string',
+      positionSeconds: 'number',
+      playing: 'boolean'
     }
   }
 };

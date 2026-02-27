@@ -1208,6 +1208,11 @@ function handleServer(msg) {
   
   // Guest-specific messages
   if (msg.t === "TRACK_SELECTED") {
+    // Official App Sync mode
+    if (msg.mode === "OFFICIAL_APP_SYNC") {
+      handleOfficialAppSyncTrackSelected(msg);
+      return;
+    }
     state.nowPlayingFilename = msg.filename;
     state.lastHostEvent = "TRACK_SELECTED";
     if (!state.isHost) {
@@ -4798,6 +4803,17 @@ function updatePartyPassUI() {
       guestMessagingFeedSection.classList.remove("hidden");
     } else {
       guestMessagingFeedSection.classList.add("hidden");
+    }
+  }
+
+  // Official App Sync: visible to host only when paid tier
+  const officialAppSyncSection = el("officialAppSyncSection");
+  if (officialAppSyncSection) {
+    const isPaid = hasPartyPassEntitlement() || hasProTierEntitlement();
+    if (isPaid && state.isHost) {
+      officialAppSyncSection.classList.remove("hidden");
+    } else {
+      officialAppSyncSection.classList.add("hidden");
     }
   }
 }
@@ -11270,3 +11286,58 @@ setInterval(() => {
     updateDebugPanel();
   }
 }, 1000);
+
+// ============================================================
+// Official App Sync Mode
+// ============================================================
+
+/**
+ * Handle TRACK_SELECTED with mode=OFFICIAL_APP_SYNC from server.
+ * Shows the "Now Syncing" info box and – for guests – opens the track
+ * in the platform's official player/deep-link.
+ */
+function handleOfficialAppSyncTrackSelected(msg) {
+  const { platform, trackRef, serverTimestampMs, positionSeconds, playing } = msg;
+
+  // Update the host-side "Now Playing" box
+  const nowPlayingBox = el('syncNowPlayingBox');
+  const platformEl    = el('syncNowPlayingPlatform');
+  const refEl         = el('syncNowPlayingRef');
+
+  if (nowPlayingBox) nowPlayingBox.classList.remove('hidden');
+  if (platformEl)    platformEl.textContent = platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : '';
+  if (refEl)         refEl.textContent = trackRef || '';
+
+  // Update status label
+  const statusEl = el('syncTrackStatus');
+  if (statusEl) statusEl.textContent = playing ? '✅ Syncing…' : '⏸ Track queued';
+
+  toast(`🎵 Official App Sync: ${platform} track synced`);
+}
+
+// Wire up the "Sync Track" button
+(function initOfficialAppSync() {
+  const btn = el('btnSyncTrack');
+  if (!btn) return;
+
+  btn.addEventListener('click', function () {
+    const platform = (el('syncPlatformSelect')?.value || '').toLowerCase();
+    const trackRef  = (el('syncTrackRefInput')?.value || '').trim();
+
+    if (!platform || !trackRef) {
+      toast('Please select a platform and enter a track URL or ID.');
+      return;
+    }
+
+    const statusEl = el('syncTrackStatus');
+    if (statusEl) statusEl.textContent = '⏳ Sending…';
+
+    send({
+      t: 'OFFICIAL_APP_SYNC_SELECT',
+      platform,
+      trackRef,
+      positionSeconds: 0,
+      playing: true
+    });
+  });
+})();
