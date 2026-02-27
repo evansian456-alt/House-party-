@@ -610,11 +610,20 @@
           Pick a track on YouTube, Spotify, or SoundCloud — everyone in the party plays it in sync via the official app.
         </p>
 
-        <!-- Platform Logo Row -->
-        <div id="platformLogoRow" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-bottom:0.75rem;">
-          <img src="/assets/platform-logos/youtube.svg" alt="YouTube" class="platform-logo" style="height:24px;width:auto;object-fit:contain;" />
-          <img src="/assets/platform-logos/spotify.svg" alt="Spotify" class="platform-logo" style="height:24px;width:auto;object-fit:contain;" />
-          <img src="/assets/platform-logos/soundcloud.svg" alt="SoundCloud" class="platform-logo" style="height:24px;width:auto;object-fit:contain;" />
+        <!-- Platform Logos Row -->
+        <div id="platformLogosRow" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+          <img src="/public/assets/platform-logos/youtube.svg"
+               alt="YouTube"
+               style="height:24px;width:auto;object-fit:contain;"
+               loading="lazy" />
+          <img src="/public/assets/platform-logos/spotify.svg"
+               alt="Spotify"
+               style="height:24px;width:auto;object-fit:contain;"
+               loading="lazy" />
+          <img src="/public/assets/platform-logos/soundcloud.svg"
+               alt="SoundCloud"
+               style="height:24px;width:auto;object-fit:contain;"
+               loading="lazy" />
         </div>
 
         <div style="display:flex;flex-direction:column;gap:0.5rem;">
@@ -630,31 +639,33 @@
           </div>
         </div>
 
-        <!-- Open in App Buttons -->
-        <div id="openInAppButtons" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.75rem;">
-          <button class="btn open-in-app-btn" id="btnOpenYouTube" data-platform="youtube" style="display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0.75rem;">
-            <img src="/assets/platform-logos/youtube.svg" alt="" aria-hidden="true" style="height:16px;width:auto;" />
-            Open in YouTube
-          </button>
-          <button class="btn open-in-app-btn" id="btnOpenSpotify" data-platform="spotify" style="display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0.75rem;">
-            <img src="/assets/platform-logos/spotify.svg" alt="" aria-hidden="true" style="height:16px;width:auto;" />
-            Open in Spotify
-          </button>
-          <button class="btn open-in-app-btn" id="btnOpenSoundCloud" data-platform="soundcloud" style="display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0.75rem;">
-            <img src="/assets/platform-logos/soundcloud.svg" alt="" aria-hidden="true" style="height:16px;width:auto;" />
-            Open in SoundCloud
-          </button>
-        </div>
-
         <div class="hidden" id="syncNowPlayingBox" style="margin-top:0.75rem;padding:0.5rem;background:rgba(255,255,255,0.06);border-radius:8px;">
           <div class="tiny muted">Now syncing:</div>
           <div id="syncNowPlayingPlatform" style="font-size:0.85rem;font-weight:600;"></div>
           <div id="syncNowPlayingRef" class="tiny muted" style="word-break:break-all;"></div>
         </div>
 
-        <!-- Compliance text -->
-        <p class="tiny muted" style="margin-top:0.75rem;font-size:0.7rem;opacity:0.7;">
-          Playback occurs within official platform apps. SyncSpeaker is not affiliated with YouTube, Spotify, or SoundCloud.
+        <!-- Open in App Buttons (shown after a track is synced) -->
+        <div class="hidden" id="openInAppButtons" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.5rem;">
+          <div class="tiny muted" style="margin-bottom:0.25rem;">Open synced track in official app:</div>
+          <button class="btn" id="btnOpenInYouTube" style="display:none;align-items:center;gap:0.5rem;justify-content:center;">
+            <img src="/public/assets/platform-logos/youtube.svg" alt="YouTube" style="height:18px;width:auto;" />
+            Open in YouTube
+          </button>
+          <button class="btn" id="btnOpenInSpotify" style="display:none;align-items:center;gap:0.5rem;justify-content:center;">
+            <img src="/public/assets/platform-logos/spotify.svg" alt="Spotify" style="height:18px;width:auto;" />
+            Open in Spotify
+          </button>
+          <button class="btn" id="btnOpenInSoundCloud" style="display:none;align-items:center;gap:0.5rem;justify-content:center;">
+            <img src="/public/assets/platform-logos/soundcloud.svg" alt="SoundCloud" style="height:18px;width:auto;" />
+            Open in SoundCloud
+          </button>
+        </div>
+
+        <!-- Compliance Text -->
+        <p class="tiny muted" style="margin-top:0.75rem;font-size:0.65rem;opacity:0.7;">
+          Playback occurs within official platform apps.<br>
+          SyncSpeaker is not affiliated with YouTube, Spotify, or SoundCloud.
         </p>
       </div>
 

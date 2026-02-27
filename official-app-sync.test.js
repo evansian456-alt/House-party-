@@ -164,7 +164,7 @@ describe('TierPolicy – getPolicyForTier', () => {
 // ============================================================
 
 const request = require('supertest');
-const { app, redis } = require('./server');
+const { app, redis, parties, startServer } = require('./server');
 
 describe('GET /api/party/:code/limits', () => {
   let freePartyCode;
@@ -320,6 +320,328 @@ describe('buildOfficialAppLink – platform validation', () => {
 });
 
 // ============================================================
+// 4. WebSocket OFFICIAL_APP_SYNC_SELECT paid gating
+// ============================================================
+
+const WebSocket = require('ws');
+
+describe('WebSocket OFFICIAL_APP_SYNC_SELECT – tier gating', () => {
+  let wsServer;
+  let wsUrl;
+
+  beforeAll(async () => {
+    wsServer = await startServer();
+    wsUrl = `ws://localhost:${wsServer.address().port}`;
+  });
+
+  afterAll((done) => {
+    if (wsServer) wsServer.close(done);
+    else done();
+  });
+
+  /**
+   * Helper: open a WebSocket, wait for a CREATED message, resolve with { ws, code }.
+   */
+  function createPartyViaWS() {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(wsUrl);
+      let timer;
+
+      function cleanup() {
+        clearTimeout(timer);
+        ws.off('open', onOpen);
+        ws.off('message', onMessage);
+        ws.off('error', onError);
+      }
+
+      function onOpen() {
+        ws.send(JSON.stringify({ t: 'CREATE', djName: 'TestDJ', source: 'local' }));
+      }
+
+      function onMessage(data) {
+        const msg = JSON.parse(data.toString());
+        if (msg.t === 'CREATED') {
+          cleanup();
+          resolve({ ws, code: msg.code });
+        }
+      }
+
+      function onError(err) {
+        cleanup();
+        reject(err);
+      }
+
+      ws.on('open', onOpen);
+      ws.on('message', onMessage);
+      ws.on('error', onError);
+
+      timer = setTimeout(() => {
+        cleanup();
+        try { ws.terminate(); } catch (_) {}
+        reject(new Error('WS create timeout'));
+      }, 5000);
+    });
+  }
+
+  /**
+   * Helper: collect the next message matching predicate.
+   */
+  function nextMessage(ws, predicate, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+      let timer;
+
+      function onMessage(data) {
+        const msg = JSON.parse(data.toString());
+        if (predicate(msg)) {
+          clearTimeout(timer);
+          ws.off('message', onMessage);
+          resolve(msg);
+        }
+      }
+
+      timer = setTimeout(() => {
+        ws.off('message', onMessage);
+        reject(new Error('WS message timeout'));
+      }, timeoutMs);
+
+      ws.on('message', onMessage);
+    });
+  }
+
+  it('FREE tier → OFFICIAL_APP_SYNC_SELECT returns TIER_NOT_PAID error', (done) => {
+    createPartyViaWS().then(({ ws, code }) => {
+      // Free tier: party has no tier set → isPaidForOfficialAppSync returns false
+      const errorP = nextMessage(ws, (m) => m.t === 'ERROR' && m.errorType === 'TIER_NOT_PAID');
+
+      ws.send(JSON.stringify({
+        t: 'OFFICIAL_APP_SYNC_SELECT',
+        platform: 'youtube',
+        trackRef: 'dQw4w9WgXcQ'
+      }));
+
+      errorP.then((msg) => {
+        expect(msg.errorType).toBe('TIER_NOT_PAID');
+        ws.close();
+        done();
+      }).catch((err) => { ws.close(); done(err); });
+    }).catch(done);
+  }, 10000);
+
+  it('PARTY_PASS tier → OFFICIAL_APP_SYNC_SELECT broadcasts TRACK_SELECTED', (done) => {
+    createPartyViaWS().then(({ ws, code }) => {
+      // Elevate tier in local memory
+      const party = parties.get(code);
+      if (party) party.tier = 'PARTY_PASS';
+
+      const trackSelectedP = nextMessage(ws, (m) => m.t === 'TRACK_SELECTED' && m.mode === 'OFFICIAL_APP_SYNC');
+
+      ws.send(JSON.stringify({
+        t: 'OFFICIAL_APP_SYNC_SELECT',
+        platform: 'youtube',
+        trackRef: 'dQw4w9WgXcQ',
+        positionSeconds: 0,
+        playing: true
+      }));
+
+      trackSelectedP.then((msg) => {
+        expect(msg.platform).toBe('youtube');
+        expect(msg.trackRef).toBe('dQw4w9WgXcQ');
+        ws.close();
+        done();
+      }).catch((err) => { ws.close(); done(err); });
+    }).catch(done);
+  }, 10000);
+
+  it('PRO tier → OFFICIAL_APP_SYNC_SELECT broadcasts TRACK_SELECTED', (done) => {
+    createPartyViaWS().then(({ ws, code }) => {
+      const party = parties.get(code);
+      if (party) party.tier = 'PRO';
+
+      const trackSelectedP = nextMessage(ws, (m) => m.t === 'TRACK_SELECTED' && m.mode === 'OFFICIAL_APP_SYNC');
+
+      ws.send(JSON.stringify({
+        t: 'OFFICIAL_APP_SYNC_SELECT',
+        platform: 'spotify',
+        trackRef: 'spotify:track:4uLU6hMCjMI75M1A2tKUQC',
+        positionSeconds: 0,
+        playing: true
+      }));
+
+      trackSelectedP.then((msg) => {
+        expect(msg.platform).toBe('spotify');
+        expect(msg.trackRef).toBe('spotify:track:4uLU6hMCjMI75M1A2tKUQC');
+        ws.close();
+        done();
+      }).catch((err) => { ws.close(); done(err); });
+    }).catch(done);
+  }, 10000);
+});
+
+// ============================================================
+// 5. TIME_PING drift correction
+// ============================================================
+
+describe('TIME_PING – drift correction (SYNC_CORRECTION)', () => {
+  let wsServer;
+  let wsUrl;
+
+  beforeAll(async () => {
+    wsServer = await startServer();
+    wsUrl = `ws://localhost:${wsServer.address().port}`;
+  });
+
+  afterAll((done) => {
+    if (wsServer) wsServer.close(done);
+    else done();
+  });
+
+  function createPartyViaWS() {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(wsUrl);
+      let timer;
+
+      function cleanup() {
+        clearTimeout(timer);
+        ws.off('open', onOpen);
+        ws.off('message', onMessage);
+        ws.off('error', onError);
+      }
+
+      function onOpen() {
+        ws.send(JSON.stringify({ t: 'CREATE', djName: 'DriftTestDJ', source: 'local' }));
+      }
+
+      function onMessage(data) {
+        const msg = JSON.parse(data.toString());
+        if (msg.t === 'CREATED') {
+          cleanup();
+          resolve({ ws, code: msg.code });
+        }
+      }
+
+      function onError(err) {
+        cleanup();
+        try { ws.terminate(); } catch (_) {}
+        reject(err);
+      }
+
+      ws.on('open', onOpen);
+      ws.on('message', onMessage);
+      ws.on('error', onError);
+
+      timer = setTimeout(() => {
+        cleanup();
+        try { ws.terminate(); } catch (_) {}
+        reject(new Error('WS create timeout'));
+      }, 5000);
+    });
+  }
+
+  function nextMessage(ws, predicate, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+      let timer;
+
+      function onMessage(data) {
+        const msg = JSON.parse(data.toString());
+        if (predicate(msg)) {
+          clearTimeout(timer);
+          ws.off('message', onMessage);
+          resolve(msg);
+        }
+      }
+
+      timer = setTimeout(() => {
+        ws.off('message', onMessage);
+        reject(new Error('WS message timeout'));
+      }, timeoutMs);
+
+      ws.on('message', onMessage);
+    });
+  }
+
+  it('sends SYNC_CORRECTION when localPositionSeconds drifts beyond threshold', (done) => {
+    createPartyViaWS().then(({ ws, code }) => {
+      const party = parties.get(code);
+      if (!party) { ws.close(); return done(new Error('Party not found in memory')); }
+
+      // Set up officialAppSync state with a track playing 30 seconds ago
+      const playStartedAtMs = Date.now() - 30000;
+      party.tier = 'PARTY_PASS';
+      party.officialAppSync = {
+        platform: 'youtube',
+        trackRef: 'dQw4w9WgXcQ',
+        playStartedAtMs,
+        seekOffsetSeconds: 0,
+        playing: true,
+        serverTimestampMs: playStartedAtMs
+      };
+
+      // Client reports position of 0s → drifts ~30s from server's ~30s position
+      const correctionP = nextMessage(ws, (m) => m.t === 'SYNC_CORRECTION');
+
+      ws.send(JSON.stringify({
+        t: 'TIME_PING',
+        clientNowMs: Date.now(),
+        pingId: 1,
+        trackRef: 'dQw4w9WgXcQ',
+        localPositionSeconds: 0
+      }));
+
+      correctionP.then((msg) => {
+        expect(msg.t).toBe('SYNC_CORRECTION');
+        expect(typeof msg.targetPositionSeconds).toBe('number');
+        expect(msg.targetPositionSeconds).toBeGreaterThan(1); // server says ~30s
+        ws.close();
+        done();
+      }).catch((err) => { ws.close(); done(err); });
+    }).catch(done);
+  }, 10000);
+
+  it('does NOT send SYNC_CORRECTION when localPositionSeconds is within threshold', (done) => {
+    createPartyViaWS().then(({ ws, code }) => {
+      const party = parties.get(code);
+      if (!party) { ws.close(); return done(new Error('Party not found in memory')); }
+
+      // Server says track started 10 seconds ago
+      const playStartedAtMs = Date.now() - 10000;
+      party.tier = 'PARTY_PASS';
+      party.officialAppSync = {
+        platform: 'youtube',
+        trackRef: 'dQw4w9WgXcQ',
+        playStartedAtMs,
+        seekOffsetSeconds: 0,
+        playing: true,
+        serverTimestampMs: playStartedAtMs
+      };
+
+      // Client reports ~10s → within 0.5s threshold → no SYNC_CORRECTION should be sent
+      let correctionReceived = false;
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.t === 'SYNC_CORRECTION') correctionReceived = true;
+      });
+
+      const clientNowMs = Date.now();
+      const localPositionSeconds = (clientNowMs - playStartedAtMs) / 1000;
+      ws.send(JSON.stringify({
+        t: 'TIME_PING',
+        clientNowMs,
+        pingId: 2,
+        trackRef: 'dQw4w9WgXcQ',
+        localPositionSeconds
+      }));
+
+      // Wait briefly then verify no SYNC_CORRECTION was sent
+      setTimeout(() => {
+        expect(correctionReceived).toBe(false);
+        ws.close();
+        done();
+      }, 1200);
+    }).catch(done);
+  }, 10000);
+});
+
+// ============================================================
 // 6. Tier-aware logo/button visibility (via tier policy)
 // ============================================================
 
@@ -420,8 +742,6 @@ describe('Open-in-App button deep links', () => {
 // 8. WebSocket OFFICIAL_APP_SYNC_SELECT – tier gating
 // 9. TIME_PING drift correction
 // ============================================================
-
-const WebSocket = require('ws');
 
 describe('WebSocket OFFICIAL_APP_SYNC_SELECT and TIME_PING', () => {
   let httpServer;
@@ -761,3 +1081,4 @@ describe('WebSocket OFFICIAL_APP_SYNC_SELECT and TIME_PING', () => {
     }, 6000);
   }, 10000);
 });
+
