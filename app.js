@@ -11522,6 +11522,7 @@ function handleOfficialAppSyncTrackSelected(msg) {
       });
       openInAppContainer.classList.remove('hidden');
     }
+    toast(`🎵 Official App Sync: ${platform} track synced`);
     return;
   }
 

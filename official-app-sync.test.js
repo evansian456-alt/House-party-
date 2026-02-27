@@ -345,24 +345,51 @@ describe('WebSocket OFFICIAL_APP_SYNC_SELECT – tier gating', () => {
   function createPartyViaWS() {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(wsUrl);
-      ws.on('open', () => {
+      let timer;
+
+      function cleanup() {
+        clearTimeout(timer);
+        ws.off('open', onOpen);
+        ws.off('message', onMessage);
+        ws.off('error', onError);
+      }
+
+      function onOpen() {
         ws.send(JSON.stringify({ t: 'CREATE', djName: 'TestDJ', source: 'local' }));
-      });
-      ws.on('message', (data) => {
+      }
+
+      function onMessage(data) {
         const msg = JSON.parse(data.toString());
-        if (msg.t === 'CREATED') resolve({ ws, code: msg.code });
-      });
-      ws.on('error', reject);
-      setTimeout(() => reject(new Error('WS create timeout')), 5000);
+        if (msg.t === 'CREATED') {
+          cleanup();
+          resolve({ ws, code: msg.code });
+        }
+      }
+
+      function onError(err) {
+        cleanup();
+        reject(err);
+      }
+
+      ws.on('open', onOpen);
+      ws.on('message', onMessage);
+      ws.on('error', onError);
+
+      timer = setTimeout(() => {
+        cleanup();
+        try { ws.terminate(); } catch (_) {}
+        reject(new Error('WS create timeout'));
+      }, 5000);
     });
   }
 
   /**
-   * Helper: send a message and collect the next message matching predicate.
+   * Helper: collect the next message matching predicate.
    */
   function nextMessage(ws, predicate, timeoutMs = 5000) {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('WS message timeout')), timeoutMs);
+      let timer;
+
       function onMessage(data) {
         const msg = JSON.parse(data.toString());
         if (predicate(msg)) {
@@ -371,6 +398,12 @@ describe('WebSocket OFFICIAL_APP_SYNC_SELECT – tier gating', () => {
           resolve(msg);
         }
       }
+
+      timer = setTimeout(() => {
+        ws.off('message', onMessage);
+        reject(new Error('WS message timeout'));
+      }, timeoutMs);
+
       ws.on('message', onMessage);
     });
   }
@@ -465,21 +498,49 @@ describe('TIME_PING – drift correction (SYNC_CORRECTION)', () => {
   function createPartyViaWS() {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(wsUrl);
-      ws.on('open', () => {
+      let timer;
+
+      function cleanup() {
+        clearTimeout(timer);
+        ws.off('open', onOpen);
+        ws.off('message', onMessage);
+        ws.off('error', onError);
+      }
+
+      function onOpen() {
         ws.send(JSON.stringify({ t: 'CREATE', djName: 'DriftTestDJ', source: 'local' }));
-      });
-      ws.on('message', (data) => {
+      }
+
+      function onMessage(data) {
         const msg = JSON.parse(data.toString());
-        if (msg.t === 'CREATED') resolve({ ws, code: msg.code });
-      });
-      ws.on('error', reject);
-      setTimeout(() => reject(new Error('WS create timeout')), 5000);
+        if (msg.t === 'CREATED') {
+          cleanup();
+          resolve({ ws, code: msg.code });
+        }
+      }
+
+      function onError(err) {
+        cleanup();
+        try { ws.terminate(); } catch (_) {}
+        reject(err);
+      }
+
+      ws.on('open', onOpen);
+      ws.on('message', onMessage);
+      ws.on('error', onError);
+
+      timer = setTimeout(() => {
+        cleanup();
+        try { ws.terminate(); } catch (_) {}
+        reject(new Error('WS create timeout'));
+      }, 5000);
     });
   }
 
   function nextMessage(ws, predicate, timeoutMs = 5000) {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('WS message timeout')), timeoutMs);
+      let timer;
+
       function onMessage(data) {
         const msg = JSON.parse(data.toString());
         if (predicate(msg)) {
@@ -488,6 +549,12 @@ describe('TIME_PING – drift correction (SYNC_CORRECTION)', () => {
           resolve(msg);
         }
       }
+
+      timer = setTimeout(() => {
+        ws.off('message', onMessage);
+        reject(new Error('WS message timeout'));
+      }, timeoutMs);
+
       ws.on('message', onMessage);
     });
   }
@@ -554,12 +621,14 @@ describe('TIME_PING – drift correction (SYNC_CORRECTION)', () => {
         if (msg.t === 'SYNC_CORRECTION') correctionReceived = true;
       });
 
+      const clientNowMs = Date.now();
+      const localPositionSeconds = (clientNowMs - playStartedAtMs) / 1000;
       ws.send(JSON.stringify({
         t: 'TIME_PING',
-        clientNowMs: Date.now(),
+        clientNowMs,
         pingId: 2,
         trackRef: 'dQw4w9WgXcQ',
-        localPositionSeconds: 10.0
+        localPositionSeconds
       }));
 
       // Wait briefly then verify no SYNC_CORRECTION was sent
