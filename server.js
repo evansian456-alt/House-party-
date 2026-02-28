@@ -754,6 +754,13 @@ if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
   app.use(Sentry.Handlers.tracingHandler());
 }
 
+// Cache-Control value used for all assets that must re-validate on every deploy.
+const NO_CACHE = 'no-cache, must-revalidate';
+
+// Loose rate limiter for explicit static asset routes (1200 req / 15 min per IP).
+// Prevents abuse of the sendFile file-system reads on these routes.
+const staticLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1200 });
+
 // Add version header to all responses
 app.use((req, res, next) => {
   res.setHeader("X-App-Version", APP_VERSION);
@@ -766,7 +773,7 @@ app.use((req, res, next) => {
 app.use(express.static(__dirname, {
   setHeaders(res, filePath) {
     if (/\.(html|js|css)$/.test(filePath)) {
-      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      res.setHeader('Cache-Control', NO_CACHE);
     }
   }
 }));
@@ -927,8 +934,40 @@ function getRegisteredRoutes() {
   return routes;
 }
 
+// Explicit static asset routes — must come BEFORE any SPA catch-all so these
+// files are never shadowed by a wildcard route, even if one is added later.
+// Express sets Content-Type automatically via sendFile.
+app.get("/app.js", staticLimiter, (req, res) => {
+  res.setHeader('Cache-Control', NO_CACHE);
+  res.sendFile(path.join(__dirname, "app.js"));
+});
+
+app.get("/service-worker.js", staticLimiter, (req, res) => {
+  res.setHeader('Cache-Control', NO_CACHE);
+  res.sendFile(path.join(__dirname, "service-worker.js"));
+});
+
+app.get("/manifest.json", staticLimiter, (req, res) => {
+  res.setHeader('Cache-Control', NO_CACHE);
+  res.sendFile(path.join(__dirname, "manifest.json"));
+});
+
+// Diagnostic endpoint — returns version info so you can confirm which build is
+// running from a mobile browser without any CLI access.
+// Does NOT expose secrets; only uses constants already logged at startup.
+app.get("/__version", (req, res) => {
+  res.setHeader('Cache-Control', NO_CACHE);
+  res.json({
+    appVersion: APP_VERSION,
+    changerVersion: CHANGER_VERSION,
+    instanceId: INSTANCE_ID,
+    nodeEnv: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Route for serving index.html at root "/"
 app.get("/", (req, res) => {
+  res.setHeader('Cache-Control', NO_CACHE);
   res.sendFile(path.join(__dirname, "index.html"));
 });
 

@@ -3,8 +3,11 @@
  * Provides offline capability and PWA installation support
  */
 
-const CACHE_NAME = 'phone-party-v1.0.1';
-const RUNTIME_CACHE = 'phone-party-runtime';
+// CACHE_NAME is tied to CHANGER_VERSION so caches auto-bust on every deploy.
+// Bump the version string here whenever app.js changes.
+const CHANGER_VERSION = '2026-02-27-a';
+const CACHE_NAME = `phone-party-${CHANGER_VERSION}`;
+const RUNTIME_CACHE = `phone-party-runtime-${CHANGER_VERSION}`;
 
 // Assets to cache on install
 const PRECACHE_ASSETS = [
