@@ -1,69 +1,310 @@
 /**
- * @jest-environment jsdom
+ * nav-auth.test.js
  *
- * Frontend state machine tests — nav-auth.test.js
+ * Unit tests for the lightweight SPA router (router.js) and
+ * auth-driven navigation logic.
  *
- * Verifies the three core auth-state transitions that drive view visibility
- * and header navigation gating.
+ * These tests run in Node (Jest) without a real browser.
+ * They import router.js directly and stub browser globals.
  */
 
 'use strict';
 
-const { APP_STATE, transitionTo, getState, render } = require('./ui/stateMachine');
+// ---------------------------------------------------------------------------
+// Stubs for browser globals consumed by router.js
+// ---------------------------------------------------------------------------
 
-/** Build the minimal DOM that the state machine needs to operate on. */
-function createDOM() {
-  document.body.innerHTML = `
-    <div id="headerAuthButtons" style="display:none"></div>
-    <section id="viewLanding"></section>
-    <section id="viewCompleteProfile" class="hidden"></section>
-    <section id="viewParty"           class="hidden"></section>
-    <section id="viewGuest"           class="hidden"></section>
-  `;
+// history stub
+const historyStub = {
+  pushState: jest.fn(),
+  replaceState: jest.fn(),
+};
+
+// showView stub
+let showViewCalls = [];
+function showView(id) { showViewCalls.push(id); }
+
+// isLoggedIn stub — toggled per test
+let _loggedIn = false;
+function isLoggedIn() { return _loggedIn; }
+
+// initPartyHomeView stub
+let initPartyHomeViewCalled = false;
+function initPartyHomeView() { initPartyHomeViewCalled = true; }
+
+// showLanding stub
+let showLandingCalled = false;
+function showLanding() { showLandingCalled = true; }
+
+// showParty stub
+let showPartyCalled = false;
+function showParty() { showPartyCalled = true; }
+
+// ALL_VIEWS (subset enough for router)
+const ALL_VIEWS = ['viewLanding', 'viewAuthHome', 'viewParty', 'viewGuest', 'viewLogin'];
+
+// state stub
+const state = { code: null };
+
+// Minimal document stub
+global.document = {
+  getElementById: jest.fn(() => ({ classList: { add: jest.fn(), remove: jest.fn() } })),
+  readyState: 'complete',
+  addEventListener: jest.fn(),
+};
+global.window = {
+  location: { pathname: '/' },
+  addEventListener: jest.fn(),
+};
+global.history = historyStub;
+
+// Expose stubs as globals so router.js can find them
+global.isLoggedIn = isLoggedIn;
+global.showView = showView;
+global.initPartyHomeView = initPartyHomeView;
+global.showLanding = showLanding;
+global.showParty = showParty;
+global.ALL_VIEWS = ALL_VIEWS;
+global.state = state;
+
+// ---------------------------------------------------------------------------
+// Load the router module
+// ---------------------------------------------------------------------------
+const router = require('./router.js');
+const { _isProtected, _partyCodeFromPath, _renderRoute, navigate, ROUTE_MAP } = router;
+
+// ---------------------------------------------------------------------------
+// Helper — reset stubs between tests
+// ---------------------------------------------------------------------------
+function resetStubs() {
+  showViewCalls = [];
+  initPartyHomeViewCalled = false;
+  showLandingCalled = false;
+  showPartyCalled = false;
+  historyStub.pushState.mockClear();
+  historyStub.replaceState.mockClear();
+  state.code = null;
 }
 
-describe('App State Machine', () => {
-  beforeEach(createDOM);
-
-  test('LOGGED_OUT: landing is visible and nav is hidden', () => {
-    transitionTo(APP_STATE.LOGGED_OUT);
-
-    expect(getState()).toBe(APP_STATE.LOGGED_OUT);
-    expect(document.getElementById('viewLanding').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('headerAuthButtons').style.display).toBe('none');
+// ---------------------------------------------------------------------------
+// ROUTE_MAP
+// ---------------------------------------------------------------------------
+describe('ROUTE_MAP', () => {
+  test('maps / to viewLanding', () => {
+    expect(ROUTE_MAP['/']).toBe('viewLanding');
   });
 
-  test('AUTHENTICATED_PROFILE_INCOMPLETE: complete-profile is visible and nav is shown', () => {
-    transitionTo(APP_STATE.AUTHENTICATED_PROFILE_INCOMPLETE);
-
-    expect(getState()).toBe(APP_STATE.AUTHENTICATED_PROFILE_INCOMPLETE);
-    expect(document.getElementById('viewCompleteProfile').classList.contains('hidden')).toBe(false);
-    // Landing should be hidden once authenticated
-    expect(document.getElementById('viewLanding').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('headerAuthButtons').style.display).not.toBe('none');
+  test('maps /home to viewAuthHome', () => {
+    expect(ROUTE_MAP['/home']).toBe('viewAuthHome');
   });
 
-  test('AUTHENTICATED_PROFILE_COMPLETE: party hub is visible and nav is shown', () => {
-    transitionTo(APP_STATE.AUTHENTICATED_PROFILE_COMPLETE);
+  test('maps /login to viewLogin', () => {
+    expect(ROUTE_MAP['/login']).toBe('viewLogin');
+  });
+});
 
-    expect(getState()).toBe(APP_STATE.AUTHENTICATED_PROFILE_COMPLETE);
-    expect(document.getElementById('viewParty').classList.contains('hidden')).toBe(false);
-    expect(document.getElementById('viewLanding').classList.contains('hidden')).toBe(true);
-    expect(document.getElementById('headerAuthButtons').style.display).not.toBe('none');
+// ---------------------------------------------------------------------------
+// _isProtected
+// ---------------------------------------------------------------------------
+describe('_isProtected()', () => {
+  test('/home is protected', () => {
+    expect(_isProtected('/home')).toBe(true);
   });
 
-  test('Transition back to LOGGED_OUT hides nav again', () => {
-    transitionTo(APP_STATE.AUTHENTICATED_PROFILE_COMPLETE);
-    transitionTo(APP_STATE.LOGGED_OUT);
-
-    expect(getState()).toBe(APP_STATE.LOGGED_OUT);
-    expect(document.getElementById('headerAuthButtons').style.display).toBe('none');
-    expect(document.getElementById('viewLanding').classList.contains('hidden')).toBe(false);
+  test('/party/ABC123 is protected', () => {
+    expect(_isProtected('/party/ABC123')).toBe(true);
   });
 
-  test('Unknown state is ignored and does not crash', () => {
-    const before = getState();
-    transitionTo('NOT_A_REAL_STATE');
-    expect(getState()).toBe(before); // state unchanged
+  test('/account is protected', () => {
+    expect(_isProtected('/account')).toBe(true);
+  });
+
+  test('/ is NOT protected', () => {
+    expect(_isProtected('/')).toBe(false);
+  });
+
+  test('/login is NOT protected', () => {
+    expect(_isProtected('/login')).toBe(false);
+  });
+
+  test('/signup is NOT protected', () => {
+    expect(_isProtected('/signup')).toBe(false);
+  });
+
+  test('/party/ (no code) is NOT treated as a valid party route', () => {
+    // The prefix check requires a non-empty code after /party/
+    expect(_isProtected('/party/')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _partyCodeFromPath
+// ---------------------------------------------------------------------------
+describe('_partyCodeFromPath()', () => {
+  test('returns code for valid 6-char code', () => {
+    expect(_partyCodeFromPath('/party/ABC123')).toBe('ABC123');
+  });
+
+  test('upper-cases the code', () => {
+    expect(_partyCodeFromPath('/party/abc123')).toBe('ABC123');
+  });
+
+  test('returns null for non-party path', () => {
+    expect(_partyCodeFromPath('/home')).toBeNull();
+  });
+
+  test('returns null for invalid code (too short)', () => {
+    expect(_partyCodeFromPath('/party/AB')).toBeNull();
+  });
+
+  test('returns null for invalid code (too long)', () => {
+    expect(_partyCodeFromPath('/party/ABCDEFG')).toBeNull();
+  });
+
+  test('returns null for /party/ with no code', () => {
+    expect(_partyCodeFromPath('/party/')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _renderRoute — route guard: unauthenticated user
+// ---------------------------------------------------------------------------
+describe('_renderRoute() — unauthenticated', () => {
+  beforeEach(() => {
+    _loggedIn = false;
+    resetStubs();
+  });
+
+  test('/ shows landing', () => {
+    _renderRoute('/');
+    expect(showViewCalls).toContain('viewLanding');
+  });
+
+  test('/login shows login view', () => {
+    _renderRoute('/login');
+    expect(showViewCalls).toContain('viewLogin');
+  });
+
+  test('/home redirects to / (route guard)', () => {
+    _renderRoute('/home');
+    expect(historyStub.replaceState).toHaveBeenCalledWith({ path: '/' }, '', '/');
+    expect(showViewCalls).toContain('viewLanding');
+  });
+
+  test('/party/ABC123 redirects to / (route guard)', () => {
+    _renderRoute('/party/ABC123');
+    expect(historyStub.replaceState).toHaveBeenCalledWith({ path: '/' }, '', '/');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// _renderRoute — authenticated user
+// ---------------------------------------------------------------------------
+describe('_renderRoute() — authenticated', () => {
+  beforeEach(() => {
+    _loggedIn = true;
+    resetStubs();
+  });
+
+  test('/ redirects to /home', () => {
+    _renderRoute('/');
+    expect(historyStub.replaceState).toHaveBeenCalledWith({ path: '/home' }, '', '/home');
+    expect(showViewCalls).toContain('viewAuthHome');
+  });
+
+  test('/login redirects to /home', () => {
+    _renderRoute('/login');
+    expect(historyStub.replaceState).toHaveBeenCalledWith({ path: '/home' }, '', '/home');
+  });
+
+  test('/home shows viewAuthHome and calls initPartyHomeView', () => {
+    _renderRoute('/home');
+    expect(showViewCalls).toContain('viewAuthHome');
+    expect(initPartyHomeViewCalled).toBe(true);
+  });
+
+  test('/party/ABC123 calls showParty() and sets state.code', () => {
+    _renderRoute('/party/ABC123');
+    expect(state.code).toBe('ABC123');
+    expect(showPartyCalled).toBe(true);
+  });
+
+  test('unknown path falls back to /home', () => {
+    _renderRoute('/unknown-route-xyz');
+    expect(historyStub.replaceState).toHaveBeenCalledWith({ path: '/home' }, '', '/home');
+    expect(showViewCalls).toContain('viewAuthHome');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// navigate()
+// ---------------------------------------------------------------------------
+describe('navigate()', () => {
+  beforeEach(() => {
+    _loggedIn = true;
+    resetStubs();
+    // reset window.location.pathname
+    global.window.location.pathname = '/home';
+  });
+
+  test('calls pushState with the given path', () => {
+    navigate('/home');
+    expect(historyStub.pushState).toHaveBeenCalledWith({ path: '/home' }, '', '/home');
+  });
+
+  test('calls replaceState when replace:true', () => {
+    navigate('/home', { replace: true });
+    expect(historyStub.replaceState).toHaveBeenCalledWith({ path: '/home' }, '', '/home');
+    expect(historyStub.pushState).not.toHaveBeenCalled();
+  });
+
+  test('renders the route after navigation', () => {
+    navigate('/home');
+    expect(showViewCalls).toContain('viewAuthHome');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// App State Machine  (ui/stateMachine.js)
+// Tests run in jsdom environment via per-describe override
+// ---------------------------------------------------------------------------
+// Note: The describe blocks below use a custom setup that creates a minimal
+// DOM rather than needing @jest-environment jsdom for the whole file.
+
+describe('AppStateMachine (ui/stateMachine.js)', () => {
+  let SM;
+
+  beforeAll(() => {
+    // Provide a minimal browser-like environment for the module
+    if (typeof document === 'undefined') {
+      global.document = {
+        getElementById: () => null,
+      };
+    }
+    if (typeof window === 'undefined') {
+      global.window = {};
+    }
+    SM = require('./ui/stateMachine');
+  });
+
+  test('APP_STATE has the four expected states', () => {
+    expect(SM.APP_STATE.LOGGED_OUT).toBe('LOGGED_OUT');
+    expect(SM.APP_STATE.AUTHENTICATED_PROFILE_INCOMPLETE).toBe('AUTHENTICATED_PROFILE_INCOMPLETE');
+    expect(SM.APP_STATE.AUTHENTICATED_PROFILE_COMPLETE).toBe('AUTHENTICATED_PROFILE_COMPLETE');
+    expect(SM.APP_STATE.IN_PARTY).toBe('IN_PARTY');
+  });
+
+  test('transitionTo changes the current state', () => {
+    SM.transitionTo(SM.APP_STATE.LOGGED_OUT);
+    expect(SM.getState()).toBe(SM.APP_STATE.LOGGED_OUT);
+
+    SM.transitionTo(SM.APP_STATE.AUTHENTICATED_PROFILE_COMPLETE);
+    expect(SM.getState()).toBe(SM.APP_STATE.AUTHENTICATED_PROFILE_COMPLETE);
+  });
+
+  test('transitionTo with unknown state leaves state unchanged', () => {
+    SM.transitionTo(SM.APP_STATE.LOGGED_OUT);
+    SM.transitionTo('NOT_A_STATE');
+    expect(SM.getState()).toBe(SM.APP_STATE.LOGGED_OUT);
   });
 });

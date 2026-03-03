@@ -22,6 +22,7 @@ const DIST = path.join(ROOT, 'dist');
 const ENTRIES = [
   'index.html',
   'app.js',
+  'router.js',
   'styles.css',
   'manifest.json',
   'service-worker.js',

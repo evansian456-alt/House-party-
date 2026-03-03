@@ -27,7 +27,7 @@ var APP_STATE = {
 var STATE_VIEW_MAP = {};
 STATE_VIEW_MAP[APP_STATE.LOGGED_OUT]                       = 'viewLanding';
 STATE_VIEW_MAP[APP_STATE.AUTHENTICATED_PROFILE_INCOMPLETE] = 'viewCompleteProfile';
-STATE_VIEW_MAP[APP_STATE.AUTHENTICATED_PROFILE_COMPLETE]   = 'viewParty';
+STATE_VIEW_MAP[APP_STATE.AUTHENTICATED_PROFILE_COMPLETE]   = 'viewAuthHome';  // authenticated create/join hub
 STATE_VIEW_MAP[APP_STATE.IN_PARTY]                         = 'viewParty';
 
 /** States that require the auth-gated navigation bar to be visible. */
@@ -43,7 +43,7 @@ var AUTH_NAV_STATES = [
  */
 var SM_ALL_VIEWS = [
   'viewLanding', 'viewChooseTier', 'viewAccountCreation', 'viewHome',
-  'viewParty', 'viewPayment', 'viewGuest', 'viewLogin', 'viewSignup',
+  'viewAuthHome', 'viewParty', 'viewPayment', 'viewGuest', 'viewLogin', 'viewSignup',
   'viewPasswordReset', 'viewProfile', 'viewUpgradeHub', 'viewVisualPackStore',
   'viewProfileUpgrades', 'viewPartyExtensions', 'viewDjTitleStore',
   'viewLeaderboard', 'viewMyProfile', 'viewCompleteProfile'
@@ -84,7 +84,7 @@ function render(newState) {
 
   // Show auth-gated nav only when the user is authenticated
   var nav = document.getElementById('headerAuthButtons');
-  if (nav) {
+  if (nav && nav.style) {
     nav.style.display = AUTH_NAV_STATES.indexOf(newState) !== -1 ? '' : 'none';
   }
 }
