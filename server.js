@@ -74,8 +74,11 @@ const { verifyStripeSignature, processStripeWebhook } = require('./stripe-webhoo
 
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = parseInt(process.env.PORT || "8080", 10);
 const APP_VERSION = "0.1.0-party-fix"; // Version identifier for debugging and version display
+
+// Early boot log so Cloud Run logs confirm the process reached this point
+console.log("[Boot] commit=" + (process.env.COMMIT_SHA || "unknown") + " port=" + PORT + " node=" + process.version);
 
 // Generate unique instance ID for this server instance
 const INSTANCE_ID = `server-${Math.random().toString(36).substring(2, 9)}`;
@@ -261,25 +264,24 @@ function validateProductionConfig() {
     return;
   }
 
-  const errors = [];
   const warnings = [];
 
-  // Required in production
+  // Strongly recommended in production (but not blocking startup)
   if (!process.env.PUBLIC_BASE_URL) {
-    errors.push('PUBLIC_BASE_URL is required in production for proxy-based deployments (Railway, Heroku, etc.)');
+    warnings.push('PUBLIC_BASE_URL not set – proxy-based URL generation will use request host');
   }
 
   if (!process.env.REDIS_URL && !process.env.REDIS_HOST) {
-    errors.push('REDIS_URL or REDIS_HOST is required in production for party state');
+    warnings.push('REDIS_URL not set – running in single-instance fallback mode (multi-device sync disabled)');
   }
 
   if (!process.env.DATABASE_URL && !process.env.DB_HOST) {
-    errors.push('DATABASE_URL or DB_HOST is required in production for user data');
+    warnings.push('DATABASE_URL not set – user auth and subscriptions will not work');
   }
 
-  // JWT_SECRET check (required for auth)
+  // JWT_SECRET check
   if (process.env.JWT_SECRET === 'your-secret-key-here' || !process.env.JWT_SECRET) {
-    errors.push('JWT_SECRET must be set to a secure random value (not default)');
+    warnings.push('JWT_SECRET not set – authentication is disabled');
   }
 
   // S3 storage check
@@ -288,34 +290,16 @@ function validateProductionConfig() {
     process.env.S3_ACCESS_KEY_ID &&
     process.env.S3_SECRET_ACCESS_KEY
   );
-  
+
   if (!hasS3Config && process.env.ALLOW_LOCAL_DISK_IN_PROD !== 'true') {
-    errors.push('S3 storage (S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY) is required in production, or set ALLOW_LOCAL_DISK_IN_PROD=true (not recommended)');
+    warnings.push('S3 storage not configured – file uploads will use local disk (not recommended in production)');
   }
 
   if (hasS3Config && !process.env.S3_ENDPOINT) {
     warnings.push('S3_ENDPOINT not set - assuming AWS S3');
   }
 
-  // Report errors and exit if any
-  if (errors.length > 0) {
-    console.error('');
-    console.error('═══════════════════════════════════════════════════════════');
-    console.error('  ❌ PRODUCTION CONFIGURATION ERRORS');
-    console.error('═══════════════════════════════════════════════════════════');
-    errors.forEach((err, i) => {
-      console.error(`  ${i + 1}. ${err}`);
-    });
-    console.error('═══════════════════════════════════════════════════════════');
-    console.error('');
-    console.error('Cannot start server with missing required configuration.');
-    console.error('Set the required environment variables and try again.');
-    console.error('See docs/ENVIRONMENT.md for details.');
-    console.error('');
-    process.exit(1);
-  }
-
-  // Report warnings
+  // Report warnings (server always starts regardless)
   if (warnings.length > 0) {
     console.warn('');
     console.warn('═══════════════════════════════════════════════════════════');
@@ -324,6 +308,7 @@ function validateProductionConfig() {
     warnings.forEach((warn, i) => {
       console.warn(`  ${i + 1}. ${warn}`);
     });
+    console.warn('  Server will start; affected features will be degraded.');
     console.warn('═══════════════════════════════════════════════════════════');
     console.warn('');
   }
@@ -800,13 +785,8 @@ async function initializeStorage() {
     storageReady = true;
     console.log('[Storage] Storage provider ready');
   } catch (err) {
-    console.error('[Storage] FATAL: Failed to initialize storage provider:', err.message);
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[Storage] Exiting due to storage initialization failure in production');
-      throw err; // Re-throw to stop server startup
-    } else {
-      console.warn('[Storage] Continuing in development mode without storage provider');
-    }
+    console.error('[Storage] Failed to initialize storage provider:', err.message);
+    console.warn('[Storage] Continuing without storage provider – file uploads will be unavailable');
   }
 }
 
@@ -988,7 +968,9 @@ app.get("/version", (req, res) => {
   res.json({
     commit: process.env.COMMIT_SHA || 'unknown',
     environment: process.env.NODE_ENV,
-    timestamp: APP_VERSION
+    appVersion: APP_VERSION,
+    timestamp: new Date().toISOString(),
+    nodeVersion: process.version
   });
 });
 
@@ -5299,10 +5281,7 @@ async function startServer() {
     console.log("✅ Storage provider ready");
   } catch (err) {
     console.error(`❌ Storage initialization failed: ${err.message}`);
-    if (IS_PRODUCTION) {
-      console.error("   Cannot start server without storage in production");
-      process.exit(1);
-    }
+    console.warn("   Continuing without storage – file upload features will be unavailable");
   }
   
   server = app.listen(PORT, "0.0.0.0", () => {

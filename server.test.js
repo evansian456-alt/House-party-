@@ -729,9 +729,22 @@ describe('Server HTTP Endpoints', () => {
       expect(response.body).toHaveProperty('environment');
     });
 
-    it('should include timestamp field', async () => {
+    it('should include timestamp field as an ISO date string', async () => {
       const response = await request(app).get('/version');
       expect(response.body).toHaveProperty('timestamp');
+      expect(() => new Date(response.body.timestamp).toISOString()).not.toThrow();
+    });
+
+    it('should include appVersion field', async () => {
+      const response = await request(app).get('/version');
+      expect(response.body).toHaveProperty('appVersion');
+      expect(typeof response.body.appVersion).toBe('string');
+    });
+
+    it('should include nodeVersion field matching process.version', async () => {
+      const response = await request(app).get('/version');
+      expect(response.body).toHaveProperty('nodeVersion');
+      expect(response.body.nodeVersion).toBe(process.version);
     });
 
     describe('COMMIT_SHA env var', () => {
