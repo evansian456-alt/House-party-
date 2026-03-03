@@ -60,7 +60,7 @@ const GATED_VIEWS = [
 
 function _getElementById(id) {
   /* Allow tests to inject a document stub via module.document */
-  const doc = (typeof module !== 'undefined' && module._document) ||
+  const doc = (typeof module !== 'undefined' && module.document) ||
               (typeof document !== 'undefined' ? document : null);
   return doc ? doc.getElementById(id) : null;
 }
