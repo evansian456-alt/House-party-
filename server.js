@@ -707,12 +707,19 @@ if (redis) {
 // SECTION 6: HTTP Security Baseline
 const helmet = require('helmet');
 const cors = require('cors');
+const compression = require('compression');
+
+// Disable X-Powered-By header
+app.disable('x-powered-by');
 
 // Configure helmet with safe defaults
 app.use(helmet({
   contentSecurityPolicy: false, // Disable CSP to avoid breaking inline scripts
   crossOriginEmbedderPolicy: false // Allow loading resources from other origins
 }));
+
+// Enable response compression
+app.use(compression());
 
 // Configure CORS
 const corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()) : [];
@@ -973,6 +980,21 @@ app.get("/__version", (req, res) => {
     instanceId: INSTANCE_ID,
     nodeEnv: process.env.NODE_ENV || 'development'
   });
+});
+
+// GET /version – returns build metadata for Cloud Run / pipeline verification
+app.get("/version", (req, res) => {
+  res.setHeader('Cache-Control', NO_CACHE);
+  res.json({
+    commit: process.env.COMMIT_SHA || 'unknown',
+    environment: process.env.NODE_ENV,
+    timestamp: APP_VERSION
+  });
+});
+
+// GET /ready – confirms the app is up and ready to serve traffic
+app.get("/ready", (req, res) => {
+  res.status(200).json({ status: 'ready' });
 });
 
 // Route for serving index.html at root "/"
@@ -7888,6 +7910,28 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error(`   Stack:`, reason.stack);
   }
   // Log but don't exit - let the application continue
+});
+
+// Graceful shutdown handler for Cloud Run (SIGTERM)
+process.on('SIGTERM', () => {
+  console.log('[Server] SIGTERM received – beginning graceful shutdown');
+  if (server) {
+    server.close(() => {
+      console.log('[Server] HTTP server closed');
+      if (redis) {
+        redis.quit().catch((err) => console.error('[Server] Redis disconnect error:', err)).finally(() => process.exit(0));
+      } else {
+        process.exit(0);
+      }
+    });
+    // Force exit after 10 seconds if graceful shutdown stalls
+    setTimeout(() => {
+      console.error('[Server] Graceful shutdown timeout – forcing exit');
+      process.exit(1);
+    }, 10000).unref();
+  } else {
+    process.exit(0);
+  }
 });
 
 // Start server if run directly (not imported as module)
