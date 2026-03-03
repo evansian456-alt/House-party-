@@ -8187,7 +8187,14 @@ process.on('SIGTERM', () => {
 
 // Start server if run directly (not imported as module)
 if (require.main === module) {
-  startServer();
+  (async () => {
+    try {
+      await startServer();
+    } catch (err) {
+      console.error('❌ Server failed to start:', err);
+      process.exit(1);
+    }
+  })();
 }
 
 // Export for testing
