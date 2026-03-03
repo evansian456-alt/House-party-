@@ -1530,16 +1530,24 @@ app.get("/api/me", apiLimiter, authMiddleware.requireAuth, async (req, res) => {
 
 /**
  * POST /api/complete-profile
- * Mark user profile as completed after onboarding
+ * Mark user profile as completed after onboarding, optionally updating DJ name
  */
 app.post("/api/complete-profile", apiLimiter, authMiddleware.requireAuth, async (req, res) => {
   try {
     const userId = req.user.userId;
+    const { djName } = req.body;
 
-    await db.query(
-      'UPDATE users SET profile_completed = TRUE WHERE id = $1',
-      [userId]
-    );
+    if (djName && djName.trim()) {
+      await db.query(
+        'UPDATE users SET profile_completed = TRUE, dj_name = $2 WHERE id = $1',
+        [userId, djName.trim().substring(0, 50)]
+      );
+    } else {
+      await db.query(
+        'UPDATE users SET profile_completed = TRUE WHERE id = $1',
+        [userId]
+      );
+    }
 
     res.json({ success: true, profileCompleted: true });
   } catch (error) {

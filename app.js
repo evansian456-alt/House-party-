@@ -309,8 +309,8 @@ const Analytics = {
     if (typeof gtag === 'function') {
       gtag('event', eventName, params);
     }
-    // Also log to console in development for debugging
-    if (process && process.env && process.env.NODE_ENV === 'development') {
+    // Also log to console for debugging (only when developer tools are open)
+    if (typeof console !== 'undefined' && console._commandLineAPI) {
       console.log('[Analytics]', eventName, params);
     }
   },
@@ -6699,7 +6699,11 @@ function initCompleteProfileView() {
       return;
     }
     try {
-      const resp = await fetch('/api/complete-profile', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const resp = await fetch('/api/complete-profile', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ djName })
+      });
       if (!resp.ok) {
         const d = await resp.json();
         if (errorEl) { errorEl.textContent = d.error || 'Failed to save profile'; errorEl.classList.remove('hidden'); }
