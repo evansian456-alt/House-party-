@@ -29,6 +29,9 @@ set -euo pipefail
 SERVICE="${1:-syncspeaker}"
 REGION="${2:-${GCP_REGION:-us-central1}}"
 PROJECT="${3:-${GCP_PROJECT_ID:?GCP_PROJECT_ID must be set}}"
+DATABASE_URL="${DATABASE_URL:-}"
+REDIS_URL="${REDIS_URL:-}"
+PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-}"
 
 echo "Deploying $SERVICE to Cloud Run (region=$REGION, project=$PROJECT) ..."
 
@@ -37,7 +40,7 @@ gcloud run deploy "$SERVICE" \
   --region "$REGION" \
   --project "$PROJECT" \
   --allow-unauthenticated \
-  --update-env-vars NODE_ENV=production \
+  --update-env-vars "NODE_ENV=production,DATABASE_URL=${DATABASE_URL},REDIS_URL=${REDIS_URL},PUBLIC_BASE_URL=${PUBLIC_BASE_URL}" \
   --update-secrets JWT_SECRET=JWT_SECRET:latest
 
 echo "Deployment complete."
