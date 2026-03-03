@@ -698,6 +698,70 @@ describe('Server HTTP Endpoints', () => {
       expect(response.headers['x-changer-version']).toBeDefined();
     });
   });
+
+  describe('GET /ready', () => {
+    it('should return 200', async () => {
+      const response = await request(app).get('/ready');
+      expect(response.status).toBe(200);
+    });
+
+    it('should return JSON with status ready', async () => {
+      const response = await request(app).get('/ready');
+      expect(response.body.status).toBe('ready');
+    });
+  });
+
+  describe('GET /version', () => {
+    it('should return 200 with JSON', async () => {
+      const response = await request(app).get('/version');
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/json/);
+    });
+
+    it('should include commit field', async () => {
+      const response = await request(app).get('/version');
+      expect(response.body).toHaveProperty('commit');
+      expect(typeof response.body.commit).toBe('string');
+    });
+
+    it('should include environment field', async () => {
+      const response = await request(app).get('/version');
+      expect(response.body).toHaveProperty('environment');
+    });
+
+    it('should include timestamp field', async () => {
+      const response = await request(app).get('/version');
+      expect(response.body).toHaveProperty('timestamp');
+    });
+
+    describe('COMMIT_SHA env var', () => {
+      let originalCommitSha;
+
+      beforeEach(() => {
+        originalCommitSha = process.env.COMMIT_SHA;
+      });
+
+      afterEach(() => {
+        if (originalCommitSha === undefined) {
+          delete process.env.COMMIT_SHA;
+        } else {
+          process.env.COMMIT_SHA = originalCommitSha;
+        }
+      });
+
+      it('should use COMMIT_SHA env var when set', async () => {
+        process.env.COMMIT_SHA = 'abc123def456';
+        const response = await request(app).get('/version');
+        expect(response.body.commit).toBe('abc123def456');
+      });
+
+      it('should fallback to "unknown" when COMMIT_SHA is not set', async () => {
+        delete process.env.COMMIT_SHA;
+        const response = await request(app).get('/version');
+        expect(response.body.commit).toBe('unknown');
+      });
+    });
+  });
 });
 
 describe('Utility Functions', () => {
