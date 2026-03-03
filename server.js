@@ -495,6 +495,9 @@ if (redisConfig) {
 let redisReady = false;
 let useFallbackMode = false;
 
+// Track DB readiness (set in startServer; used by /readyz)
+let dbReady = false;
+
 if (redis) {
   redis.on("connect", () => {
     console.log(`[Redis] TCP connection established (instance: ${INSTANCE_ID}, source: ${redisConfigSource})`);
@@ -1021,6 +1024,25 @@ app.get("/health", async (req, res) => {
   }
   
   res.json(health);
+});
+
+// Liveness probe: always returns 200 so Cloud Run knows the process is alive
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ ok: true });
+});
+
+// Readiness probe: returns 200 only when the database is ready, else 503
+app.get("/readyz", async (_req, res) => {
+  try {
+    const check = await db.healthCheck();
+    if (check.healthy) {
+      res.status(200).json({ ok: true, db: "ready" });
+    } else {
+      res.status(503).json({ ok: false, db: "unavailable" });
+    }
+  } catch (_err) {
+    res.status(503).json({ ok: false, db: "unavailable" });
+  }
 });
 
 // API health endpoint with full spec - returns ok: true/false based on readiness
@@ -5482,6 +5504,7 @@ async function startServer() {
       console.log("✅ Database connected successfully");
       await db.initializeSchema();
       console.log("✅ Database schema initialized");
+      dbReady = true;
     } else {
       console.warn(`⚠️  Database health check failed: ${dbHealth.error}`);
       console.warn("   Authentication features will not be available");
