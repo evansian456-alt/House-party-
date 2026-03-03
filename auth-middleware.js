@@ -8,13 +8,15 @@ const jwt = require('jsonwebtoken');
 const { isValidEmail, isValidPassword } = require('./auth-utils');
 
 if (!process.env.JWT_SECRET) {
-  throw new Error('[Auth] JWT_SECRET environment variable is required');
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[Auth] JWT_SECRET environment variable is required in production');
+  }
+  console.warn('[Auth] WARNING: JWT_SECRET not set – using insecure dev-only fallback. NEVER use this in production.');
 }
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (process.env.NODE_ENV !== 'production') {
-  console.warn('[Auth] WARNING: Using JWT secret - development mode');
-}
+// In production the throw above guarantees JWT_SECRET is set; the fallback is dev/test only.
+const JWT_SECRET = process.env.NODE_ENV === 'production'
+  ? process.env.JWT_SECRET
+  : (process.env.JWT_SECRET || 'dev-only-insecure-fallback-secret');
 
 const JWT_EXPIRES_IN = '7d'; // JWT token expires in 7 days
 const SALT_ROUNDS = 10;
