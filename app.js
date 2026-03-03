@@ -6853,8 +6853,6 @@ function attemptAddPhone() {
  */
 async function initAuthFlow() {
   const headerAuthButtons = document.getElementById('headerAuthButtons');
-  // Shorthand to the state machine (loaded by ui/stateMachine.js before app.js).
-  const SM = window.AppStateMachine;
   try {
     const response = await fetch('/api/me');
     if (!response.ok) {
@@ -6862,7 +6860,6 @@ async function initAuthFlow() {
       if (headerAuthButtons) headerAuthButtons.style.display = 'none';
       window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.LOGGED_OUT);
       setView('landing', { fromHash: true });
-      if (SM) SM.transitionTo(SM.APP_STATE.LOGGED_OUT);
       return;
     }
     const data = await response.json();
@@ -6878,18 +6875,15 @@ async function initAuthFlow() {
     if (!data.user || !data.user.profileCompleted) {
       window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.PROFILE_INCOMPLETE);
       setView('completeProfile', { fromHash: true });
-      if (SM) SM.transitionTo(SM.APP_STATE.AUTHENTICATED_PROFILE_INCOMPLETE);
     } else {
       window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.PARTY_HUB);
       setView('authHome', { fromHash: true });
-      if (SM) SM.transitionTo(SM.APP_STATE.AUTHENTICATED_PROFILE_COMPLETE);
     }
   } catch (err) {
     console.warn('[Auth] Could not check auth status:', err.message);
     if (headerAuthButtons) headerAuthButtons.style.display = 'none';
     window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.LOGGED_OUT);
     setView('landing', { fromHash: true });
-    if (SM) SM.transitionTo(SM.APP_STATE.LOGGED_OUT);
   }
 }
 
@@ -6929,7 +6923,7 @@ function initCompleteProfileView() {
         showView('viewAuthHome');
         initPartyHomeView();
       }
-      if (window.AppStateMachine) window.AppStateMachine.transitionTo(window.AppStateMachine.APP_STATE.AUTHENTICATED_PROFILE_COMPLETE);
+      if (window.AppStateMachine) window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.PARTY_HUB);
     } catch (err) {
       if (errorEl) { errorEl.textContent = 'Network error. Please try again.'; errorEl.classList.remove('hidden'); }
     }
@@ -9789,7 +9783,6 @@ async function handleLogout() {
   if (headerAuthButtons) headerAuthButtons.style.display = 'none';
   window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.LOGGED_OUT);
   setView('landing');
-  if (window.AppStateMachine) window.AppStateMachine.transitionTo(window.AppStateMachine.APP_STATE.LOGGED_OUT);
   showToast('👋 Logged out');
 }
 
