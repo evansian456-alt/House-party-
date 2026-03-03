@@ -32,7 +32,13 @@ console.log('[Changer] version:', CHANGER_VERSION);
 // Dev/Test Mode Configuration
 const DEV_MODE = window.location.search.includes('devmode=true') || window.location.hash.includes('devmode');
 const TEST_MODE = window.location.search.includes('testmode=true') || window.location.hash.includes('testmode');
-const SKIP_AUTH = DEV_MODE || TEST_MODE; // Skip authentication in dev/test mode
+// Dev bypass is only allowed when explicitly enabled via localStorage flag.
+// This is an intentional one-time check at startup — the flag is read once and
+// cannot change mid-session, which is the desired security behavior.
+// Default must be OFF — do not skip auth in normal usage.
+const SKIP_AUTH = (DEV_MODE || TEST_MODE) && (() => {
+  try { return localStorage.getItem('devBypassEnabled') === 'true'; } catch(e) { return false; }
+})();
 const AUTO_START_PARTY = window.location.search.includes('autostart=true');
 
 // Sync quality indicator labels
@@ -45,6 +51,172 @@ const SYNC_QUALITY_POOR = "Poor";
 const ALL_VIEWS = ['viewLanding', 'viewChooseTier', 'viewAccountCreation', 'viewHome', 'viewParty', 'viewPayment', 'viewGuest', 
                    'viewLogin', 'viewSignup', 'viewPasswordReset', 'viewProfile', 'viewUpgradeHub', 'viewVisualPackStore',
                    'viewProfileUpgrades', 'viewPartyExtensions', 'viewDjTitleStore', 'viewLeaderboard', 'viewMyProfile'];
+
+// ============================================================
+// PROFILE SCHEMA (versioned localStorage helpers)
+// ============================================================
+const PROFILE_SCHEMA_VERSION = 1;
+const PROFILE_STORAGE_KEY = 'syncSpeakerProfile_v' + PROFILE_SCHEMA_VERSION;
+
+function getSavedProfile() {
+  try {
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (!p || !p.djName) return null;
+    return p;
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveProfile(profile) {
+  try {
+    // Clear any older schema version keys (e.g. v0 → v0 when current is v1).
+    // The loop is intentionally 0..PROFILE_SCHEMA_VERSION-1 so it cleans up all
+    // previously deployed storage keys when the schema version is bumped.
+    for (let v = 0; v < PROFILE_SCHEMA_VERSION; v++) {
+      localStorage.removeItem('syncSpeakerProfile_v' + v);
+    }
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({ ...profile, schemaVersion: PROFILE_SCHEMA_VERSION }));
+  } catch (e) {
+    console.warn('[Profile] Could not save profile:', e);
+  }
+}
+
+function clearProfile() {
+  for (let v = 0; v <= PROFILE_SCHEMA_VERSION; v++) {
+    try { localStorage.removeItem('syncSpeakerProfile_v' + v); } catch (e) {}
+  }
+  try { localStorage.removeItem('syncSpeakerPrototypeId'); } catch (e) {}
+}
+
+function hasValidProfile() {
+  return getSavedProfile() !== null;
+}
+
+// ============================================================
+// VIEW REGISTRY — single source of truth for all screens
+// ============================================================
+// Note: onEnter callbacks reference functions defined later in this file;
+// they are only *called* at runtime, so forward references are safe.
+/* eslint-disable no-use-before-define */
+const VIEWS = {
+  landing:       { id: 'viewLanding',         requiresAuth: false, hash: 'landing',     onEnter: () => showLanding() },
+  chooseTier:    { id: 'viewChooseTier',       requiresAuth: false, hash: 'choose-tier', onEnter: () => showChooseTier() },
+  auth:          { id: 'viewAccountCreation',  requiresAuth: false, hash: 'auth',        onEnter: () => showAccountCreation() },
+  createJoin:    { id: 'viewHome',             requiresAuth: true,  hash: 'create-join', onEnter: () => showHome() },
+  party:         { id: 'viewParty',            requiresAuth: true,  hash: 'party',       onEnter: () => showParty() },
+  guest:         { id: 'viewGuest',            requiresAuth: false, hash: 'guest',       onEnter: () => showGuest() },
+  payment:       { id: 'viewPayment',          requiresAuth: false, hash: 'payment',     onEnter: () => showPayment() },
+  login:         { id: 'viewLogin',            requiresAuth: false, hash: 'login' },
+  signup:        { id: 'viewSignup',           requiresAuth: false, hash: 'signup' },
+  passwordReset: { id: 'viewPasswordReset',    requiresAuth: false, hash: 'reset' },
+  profile:       { id: 'viewProfile',          requiresAuth: true,  hash: 'profile' },
+  upgradeHub:    { id: 'viewUpgradeHub',       requiresAuth: false, hash: 'upgrade' },
+  leaderboard:   { id: 'viewLeaderboard',      requiresAuth: false, hash: 'leaderboard' },
+  myProfile:     { id: 'viewMyProfile',        requiresAuth: true,  hash: 'my-profile' },
+};
+/* eslint-enable no-use-before-define */
+
+// Hash → viewName lookup (built from VIEWS registry)
+const HASH_TO_VIEW = Object.fromEntries(
+  Object.entries(VIEWS).map(([name, def]) => [def.hash, name])
+);
+
+// ============================================================
+// SET VIEW — single navigation controller
+// ============================================================
+let _currentViewName = null;
+
+/**
+ * Navigate to a named view.
+ * @param {string} viewName  - Key from VIEWS registry
+ * @param {object} [opts]
+ * @param {boolean} [opts.fromHash] - true when called from hashchange (avoids redundant pushState)
+ */
+function setView(viewName, opts = {}) {
+  const view = VIEWS[viewName];
+  if (!view) {
+    console.error('[NAV] Unknown view:', viewName, '— valid views:', Object.keys(VIEWS));
+    return;
+  }
+
+  // Auth gating: redirect unauthenticated users away from protected views
+  if (view.requiresAuth) {
+    const authenticated = (typeof isLoggedIn === 'function' && isLoggedIn()) || hasValidProfile();
+    if (!authenticated) {
+      console.log('[NAV] Auth required for', viewName, '→ redirecting to auth');
+      setView('auth', opts);
+      return;
+    }
+  }
+
+  const from = _currentViewName;
+  _currentViewName = viewName;
+  console.log('[NAV]', from, '->', viewName, { hash: '#' + view.hash });
+
+  // Update location hash (unless triggered by a hashchange)
+  if (!opts.fromHash && window.location && window.location.hash !== '#' + view.hash) {
+    try { history.pushState(null, '', '#' + view.hash); } catch (e) { /* may throw in tests */ }
+  }
+
+  // Use view-specific show function (handles state cleanup) or fall back to generic showView()
+  if (typeof view.onEnter === 'function') {
+    view.onEnter();
+  } else {
+    showView(view.id);
+  }
+
+  // Apply enter animation and update nav visibility
+  const targetEl = document.getElementById(view.id);
+  if (targetEl) {
+    targetEl.classList.remove('is-entering');
+    // Force reflow so the animation re-triggers
+    void targetEl.offsetWidth;
+    targetEl.classList.add('is-entering');
+    targetEl.addEventListener('animationend', () => targetEl.classList.remove('is-entering'), { once: true });
+
+    // Accessibility: focus first heading or interactive element and scroll it into view
+    setTimeout(() => {
+      const focusTarget = targetEl.querySelector('h1, h2, [autofocus], button:not([disabled]), input:not([disabled])');
+      if (focusTarget) {
+        focusTarget.focus({ preventScroll: false });
+        focusTarget.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }, 50);
+  }
+
+  // Show/hide header elements based on auth state
+  _updateNavVisibility();
+}
+
+/**
+ * Update header/nav visibility based on post-auth vs pre-auth state.
+ */
+function _updateNavVisibility() {
+  const authenticated = (typeof isLoggedIn === 'function' && isLoggedIn()) || hasValidProfile();
+  const postAuthEls = document.querySelectorAll('.post-auth-only');
+  postAuthEls.forEach(el => {
+    if (authenticated) {
+      el.classList.remove('nav-hidden');
+    } else {
+      el.classList.add('nav-hidden');
+    }
+  });
+}
+
+/**
+ * Handle browser hash changes (back/forward button support).
+ */
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.replace('#', '');
+  if (!hash) return;
+  const viewName = HASH_TO_VIEW[hash];
+  if (viewName) {
+    setView(viewName, { fromHash: true });
+  }
+});
 
 // User tier constants
 const USER_TIER = {
@@ -6658,7 +6830,22 @@ function attemptAddPhone() {
     console.warn("[Init] WebSocket connection failed on startup:", error);
     // Continue with app initialization - WebSocket can reconnect later
   }
-  showLanding();
+
+  // BOOT: decide initial view based on auth state
+  const _bootAuthenticated = (typeof isLoggedIn === 'function' && isLoggedIn()) || hasValidProfile();
+  console.log('[BOOT]', { commit: CHANGER_VERSION, loggedIn: _bootAuthenticated, profile: hasValidProfile() ? getSavedProfile() : null });
+
+  // Check if hash already requests a specific view (e.g. after refresh or back navigation)
+  const _bootHash = window.location.hash.replace('#', '');
+  const _bootHashView = HASH_TO_VIEW[_bootHash];
+
+  if (_bootHashView) {
+    setView(_bootHashView);
+  } else if (_bootAuthenticated) {
+    setView('createJoin');
+  } else {
+    setView('landing');
+  }
   
   // Initialize music player
   initializeMusicPlayer();
@@ -6727,19 +6914,26 @@ function attemptAddPhone() {
       state.prototypeMode = false;
       
       // For now, just proceed to home (actual signup would be implemented here)
+      // Save profile so returning users skip landing
+      saveProfile({ djName, email, tier: state.userTier });
       toast(`Account created! Welcome to ${state.selectedTier} tier`);
-      showHome();
+      setView('createJoin');
     };
   }
 
   if (btnShowLogin) {
     btnShowLogin.onclick = () => {
       console.log("[UI] Show login clicked");
-      showView('viewLogin');
+      setView('login');
     };
   }
 
   if (btnSkipAccount) {
+    // Prototype/testing mode: only show skip button when DEV_MODE is active
+    if (!DEV_MODE && !TEST_MODE) {
+      const skipSection = btnSkipAccount.closest('.prototype-mode-section');
+      if (skipSection) skipSection.classList.add('hidden');
+    }
     btnSkipAccount.onclick = () => {
       console.log("[UI] Skip account clicked - entering prototype mode");
       
@@ -6786,8 +6980,10 @@ function attemptAddPhone() {
     }
     localStorage.setItem('syncSpeakerPrototypeId', state.temporaryUserId);
     
+    // Save a minimal profile so the user is considered "logged in" on next refresh
+    saveProfile({ djName: 'DJ Proto', tier: state.userTier, prototypeMode: true });
     toast(`Prototype mode activated (${state.userTier}) - No account required`);
-    showHome();
+    setView('createJoin');
   }
 
   // Tier selection handlers (from viewChooseTier page)
@@ -9266,7 +9462,7 @@ function setupAuthEventListeners() {
       if (isLoggedIn()) {
         showProfile();
       } else {
-        showView('viewLogin');
+        setView('login');
       }
     });
   }
@@ -9325,38 +9521,38 @@ function setupAuthEventListeners() {
   // Close profile
   const btnCloseProfile = document.getElementById('btnCloseProfile');
   if (btnCloseProfile) {
-    btnCloseProfile.addEventListener('click', () => showView('viewLanding'));
+    btnCloseProfile.addEventListener('click', () => setView('landing'));
   }
   
   // Navigation links
   document.getElementById('linkToSignup')?.addEventListener('click', (e) => {
     e.preventDefault();
-    showView('viewSignup');
+    setView('signup');
   });
   
   document.getElementById('linkToLogin')?.addEventListener('click', (e) => {
     e.preventDefault();
-    showView('viewLogin');
+    setView('login');
   });
   
   document.getElementById('linkToLanding')?.addEventListener('click', (e) => {
     e.preventDefault();
-    showView('viewLanding');
+    setView('landing');
   });
   
   document.getElementById('linkSignupToLanding')?.addEventListener('click', (e) => {
     e.preventDefault();
-    showView('viewLanding');
+    setView('landing');
   });
   
   document.getElementById('linkForgotPassword')?.addEventListener('click', (e) => {
     e.preventDefault();
-    showView('viewPasswordReset');
+    setView('passwordReset');
   });
   
   document.getElementById('linkResetToLogin')?.addEventListener('click', (e) => {
     e.preventDefault();
-    showView('viewLogin');
+    setView('login');
   });
 }
 
@@ -9373,8 +9569,9 @@ function handleLogin() {
   if (result.success) {
     state.userTier = result.user.tier;
     updateUIForLoggedInUser(result.user);
-    // Redirect to home to start using the app
-    showHome();
+    saveProfile({ djName: result.user.djName, email: result.user.email, tier: result.user.tier });
+    // Redirect to create/join after login
+    setView('createJoin');
     showToast('✅ Welcome back!');
   } else {
     errorEl.textContent = result.error;
@@ -9406,8 +9603,9 @@ function handleSignup() {
     if (loginResult.success) {
       state.userTier = loginResult.user.tier;
       updateUIForLoggedInUser(loginResult.user);
-      // Redirect to home to start using the app
-      showHome();
+      saveProfile({ djName, email, tier: loginResult.user.tier });
+      // Redirect to create/join after signup
+      setView('createJoin');
       showToast('✅ Welcome to Phone Party! Account created successfully!');
     }
   } else {
@@ -9421,13 +9619,16 @@ function handleSignup() {
  */
 function handleLogout() {
   logOut();
+  clearProfile();
   state.userTier = USER_TIER.FREE;
+  state.prototypeMode = false;
+  state.temporaryUserId = null;
   const btnAccount = document.getElementById('btnAccount');
   if (btnAccount) {
     btnAccount.textContent = '👤';
     btnAccount.title = 'Account';
   }
-  showView('viewLanding');
+  setView('landing');
   showToast('👋 Logged out');
 }
 
@@ -9499,7 +9700,7 @@ function handleProfileUpdate() {
 function showProfile() {
   const user = getCurrentUser();
   if (!user) {
-    showView('viewLogin');
+    setView('login');
     return;
   }
   
@@ -11618,3 +11819,20 @@ function handleOfficialAppSyncTrackSelected(msg) {
     });
   });
 })();
+
+// Test/module exports — allows Jest to require() these helpers directly.
+// In the browser this block is never reached (no `module` global).
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    VIEWS,
+    HASH_TO_VIEW,
+    ALL_VIEWS,
+    PROFILE_SCHEMA_VERSION,
+    getSavedProfile,
+    saveProfile,
+    clearProfile,
+    hasValidProfile,
+    setView,
+    SKIP_AUTH,
+  };
+}
