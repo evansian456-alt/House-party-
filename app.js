@@ -25,7 +25,7 @@ const AUDIO_UNLOCK_SUCCESS_DELAY_MS = 300; // Delay to show "Audio enabled" succ
 
 // Changer version – bump this whenever platform detection / URL transformation logic changes.
 // Used to confirm the new changer build is running (visible in browser devtools console).
-const CHANGER_VERSION = '2026-02-27-a';
+const CHANGER_VERSION = '2026-03-03-a';
 console.log('[Changer] version:', CHANGER_VERSION);
 
 // Sync quality indicator labels
