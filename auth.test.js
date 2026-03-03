@@ -32,6 +32,46 @@ function createTestApp() {
 }
 
 describe('Authentication Middleware', () => {
+  describe('JWT_SECRET guard semantics', () => {
+    const originalEnv = process.env.JWT_SECRET;
+    const originalNodeEnv = process.env.NODE_ENV;
+
+    beforeEach(() => {
+      jest.resetModules();
+    });
+
+    afterEach(() => {
+      // Restore env after each test
+      if (originalEnv === undefined) delete process.env.JWT_SECRET;
+      else process.env.JWT_SECRET = originalEnv;
+      process.env.NODE_ENV = originalNodeEnv;
+    });
+
+    it('should throw in production when JWT_SECRET is missing', () => {
+      process.env.NODE_ENV = 'production';
+      delete process.env.JWT_SECRET;
+      expect(() => require('./auth-middleware')).toThrow(/JWT_SECRET environment variable is required in production/);
+    });
+
+    it('should NOT throw in development when JWT_SECRET is missing', () => {
+      process.env.NODE_ENV = 'development';
+      delete process.env.JWT_SECRET;
+      expect(() => require('./auth-middleware')).not.toThrow();
+    });
+
+    it('should NOT throw in test mode when JWT_SECRET is missing', () => {
+      process.env.NODE_ENV = 'test';
+      delete process.env.JWT_SECRET;
+      expect(() => require('./auth-middleware')).not.toThrow();
+    });
+
+    it('should NOT throw in production when JWT_SECRET is provided', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.JWT_SECRET = 'a-valid-secret-that-is-long-enough-for-jwt-signing-purposes';
+      expect(() => require('./auth-middleware')).not.toThrow();
+    });
+  });
+
   describe('Password hashing', () => {
     it('should hash passwords', async () => {
       const password = 'test123';

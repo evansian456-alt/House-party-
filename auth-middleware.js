@@ -7,16 +7,14 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { isValidEmail, isValidPassword } = require('./auth-utils');
 
-// JWT_SECRET is REQUIRED in production. In development/test a safe fallback is used
-// so the server starts without crashing — but auth will be insecure.
+// JWT_SECRET is REQUIRED in production. In development/test a per-process random fallback
+// is used so the server starts without crashing. JWT integrity remains secure, but tokens
+// will be invalidated on restart and will not be shared across multiple instances.
 const _isProduction = process.env.NODE_ENV === 'production';
 if (_isProduction && !process.env.JWT_SECRET) {
   throw new Error('[Auth] JWT_SECRET environment variable is required in production. Set it via Cloud Run env vars or GCP Secret Manager.');
 }
-// In non-production, generate a per-process fallback so JWT signing still works.
-// This is intentionally NOT a hard-coded constant to avoid accidental reuse.
-const _devFallback = require('crypto').randomBytes(48).toString('hex');
-const JWT_SECRET = process.env.JWT_SECRET || _devFallback;
+const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(48).toString('hex');
 
 if (!process.env.JWT_SECRET) {
   console.warn('[Auth] WARNING: JWT_SECRET not set — using a random per-process dev fallback. All existing tokens will be invalidated on restart. Set JWT_SECRET before deploying to production!');

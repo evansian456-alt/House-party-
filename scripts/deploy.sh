@@ -37,7 +37,7 @@ gcloud run deploy "$SERVICE" \
   --region "$REGION" \
   --project "$PROJECT" \
   --allow-unauthenticated \
-  --set-env-vars NODE_ENV=production \
+  --update-env-vars NODE_ENV=production \
   --update-secrets JWT_SECRET=JWT_SECRET:latest
 
 echo "Deployment complete."
