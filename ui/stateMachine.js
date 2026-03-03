@@ -10,7 +10,8 @@
  *   LOGGED_OUT                       Landing page, nav hidden.
  *   AUTHENTICATED_PROFILE_INCOMPLETE  "Complete your profile" view, nav visible.
  *   AUTHENTICATED_PROFILE_COMPLETE    Party hub (create/join), nav visible.
- *   IN_PARTY                          In-party view (host or guest), nav visible.
+ *   IN_PARTY                          In-party view (host), nav visible.
+ *   IN_PARTY_GUEST                    In-party view (guest), nav visible.
  */
 
 'use strict';
@@ -20,7 +21,8 @@ var APP_STATE = {
   LOGGED_OUT: 'LOGGED_OUT',
   AUTHENTICATED_PROFILE_INCOMPLETE: 'AUTHENTICATED_PROFILE_INCOMPLETE',
   AUTHENTICATED_PROFILE_COMPLETE: 'AUTHENTICATED_PROFILE_COMPLETE',
-  IN_PARTY: 'IN_PARTY'
+  IN_PARTY: 'IN_PARTY',
+  IN_PARTY_GUEST: 'IN_PARTY_GUEST'
 };
 
 /** Which view element to reveal for each state. */
@@ -28,13 +30,15 @@ var STATE_VIEW_MAP = {};
 STATE_VIEW_MAP[APP_STATE.LOGGED_OUT]                       = 'viewLanding';
 STATE_VIEW_MAP[APP_STATE.AUTHENTICATED_PROFILE_INCOMPLETE] = 'viewCompleteProfile';
 STATE_VIEW_MAP[APP_STATE.AUTHENTICATED_PROFILE_COMPLETE]   = 'viewAuthHome';  // authenticated create/join hub
-STATE_VIEW_MAP[APP_STATE.IN_PARTY]                         = 'viewParty';
+STATE_VIEW_MAP[APP_STATE.IN_PARTY]                         = 'viewParty';     // host party view
+STATE_VIEW_MAP[APP_STATE.IN_PARTY_GUEST]                   = 'viewGuest';     // guest party view
 
 /** States that require the auth-gated navigation bar to be visible. */
 var AUTH_NAV_STATES = [
   APP_STATE.AUTHENTICATED_PROFILE_INCOMPLETE,
   APP_STATE.AUTHENTICATED_PROFILE_COMPLETE,
-  APP_STATE.IN_PARTY
+  APP_STATE.IN_PARTY,
+  APP_STATE.IN_PARTY_GUEST
 ];
 
 /**
