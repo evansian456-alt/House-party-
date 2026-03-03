@@ -95,7 +95,7 @@ function render(newState) {
  * @param {string} newState - One of APP_STATE values.
  */
 function transitionTo(newState) {
-  if (!(newState in APP_STATE)) {
+  if (!Object.values(APP_STATE).includes(newState)) {
     console.warn('[StateMachine] Unknown state:', newState);
     return;
   }

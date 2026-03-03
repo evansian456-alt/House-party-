@@ -814,6 +814,6 @@ View transitions are managed by `ui/stateMachine.js` and exposed as
 | `AUTHENTICATED_PROFILE_COMPLETE` | Party hub | ✅ |
 | `IN_PARTY` | Party view | ✅ |
 
-Call `window.AppStateMachine.transitionTo(APP_STATE.*)` anywhere in the
+Call `window.AppStateMachine.transitionTo(window.AppStateMachine.APP_STATE.*)` anywhere in the
 codebase to perform an authenticated state change.
 
