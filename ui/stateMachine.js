@@ -29,7 +29,7 @@ const STATES = Object.freeze({
 const STATE_VIEWS = {
   [STATES.LOGGED_OUT]:         ['viewLanding'],
   [STATES.PROFILE_INCOMPLETE]: ['viewCompleteProfile'],
-  [STATES.PARTY_HUB]:          ['viewParty'],
+  [STATES.PARTY_HUB]:          ['viewAuthHome'],
   [STATES.IN_PARTY]:           ['viewParty']
 };
 
@@ -37,6 +37,7 @@ const STATE_VIEWS = {
 const GATED_VIEWS = [
   'viewLanding',
   'viewCompleteProfile',
+  'viewAuthHome',
   'viewParty',
   'viewGuest',
   'viewHome',

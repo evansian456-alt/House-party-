@@ -20,6 +20,7 @@ function buildDOM() {
     <div id="headerAuthButtons" style="display:none"></div>
     <section id="viewLanding"></section>
     <section id="viewCompleteProfile" class="hidden"></section>
+    <section id="viewAuthHome" class="hidden"></section>
     <section id="viewParty" class="hidden"></section>
     <section id="viewGuest" class="hidden"></section>
     <section id="viewHome" class="hidden"></section>
@@ -107,8 +108,12 @@ describe('StateMachine – PROFILE_INCOMPLETE', () => {
 describe('StateMachine – PARTY_HUB', () => {
   beforeEach(() => sm.transitionTo(sm.STATES.PARTY_HUB));
 
-  test('shows viewParty (party hub)', () => {
-    expect(isHidden('viewParty')).toBe(false);
+  test('shows viewAuthHome (create/join hub)', () => {
+    expect(isHidden('viewAuthHome')).toBe(false);
+  });
+
+  test('hides viewParty while on hub', () => {
+    expect(isHidden('viewParty')).toBe(true);
   });
 
   test('hides viewLanding', () => {
@@ -151,7 +156,7 @@ describe('StateMachine – state transitions', () => {
     expect(isNavVisible()).toBe(true);
 
     sm.transitionTo(sm.STATES.PARTY_HUB);
-    expect(isHidden('viewParty')).toBe(false);
+    expect(isHidden('viewAuthHome')).toBe(false);
     expect(isHidden('viewCompleteProfile')).toBe(true);
     expect(isNavVisible()).toBe(true);
   });
@@ -161,7 +166,7 @@ describe('StateMachine – state transitions', () => {
     sm.transitionTo(sm.STATES.LOGGED_OUT);
     expect(isNavVisible()).toBe(false);
     expect(isHidden('viewLanding')).toBe(false);
-    expect(isHidden('viewParty')).toBe(true);
+    expect(isHidden('viewAuthHome')).toBe(true);
   });
 
   test('unknown state emits warning and does not crash', () => {
