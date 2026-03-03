@@ -2523,6 +2523,8 @@
     }
   </script>
   
+  <!-- State machine must load before app.js -->
+  <script src="ui/stateMachine.js"></script>
   <script src="app.js"></script>
   
   <!-- Dev Navigation Panel (only visible in dev mode) -->
@@ -2606,6 +2608,21 @@
         }
       });
     }
+  </script>
+
+  <!-- Version footer: build info surfaced in UI (requirement 5) -->
+  <footer id="appVersionFooter" class="app-version-footer"></footer>
+  <script>
+    // Populate the version footer with CHANGER_VERSION once app.js has loaded.
+    // The zero-width space (\u200B) is inserted before the version string to
+    // prevent some browser extensions from mistakenly hiding text that contains
+    // the literal word "version" (e.g., certain ad or tracking blockers).
+    window.addEventListener('load', function() {
+      var footer = document.getElementById('appVersionFooter');
+      if (footer && typeof CHANGER_VERSION !== 'undefined') {
+        footer.textContent = '\u200B' + CHANGER_VERSION;
+      }
+    });
   </script>
 </body>
 </html>

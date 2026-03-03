@@ -6644,23 +6644,20 @@ function attemptAddPhone() {
 
 /**
  * Initialize auth flow: check if user is logged in and redirect appropriately.
- * - Logged out: show landing page with Login/Signup CTAs, hide header icons
- * - Logged in + profileCompleted=false: show complete-profile view
- * - Logged in + profileCompleted=true: show party (authenticated home) view
+ * Uses AppStateMachine.transitionTo() for all view/nav switching.
+ * - Logged out: LOGGED_OUT state (landing page, nav hidden)
+ * - Logged in + profileCompleted=false: PROFILE_INCOMPLETE state
+ * - Logged in + profileCompleted=true: PARTY_HUB state
  */
 async function initAuthFlow() {
-  const headerAuthButtons = document.getElementById('headerAuthButtons');
   try {
     const response = await fetch('/api/me');
     if (!response.ok) {
-      // Not authenticated - show landing page without header icons
-      if (headerAuthButtons) headerAuthButtons.style.display = 'none';
+      window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.LOGGED_OUT);
       showLanding();
       return;
     }
     const data = await response.json();
-    // Authenticated - show header icons
-    if (headerAuthButtons) headerAuthButtons.style.display = '';
     // Update state from server data
     state.userTier = data.tier || USER_TIER.FREE;
     if (data.user && data.user.djName) {
@@ -6668,15 +6665,17 @@ async function initAuthFlow() {
     }
     // Redirect based on profileCompleted
     if (!data.user || !data.user.profileCompleted) {
+      window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.PROFILE_INCOMPLETE);
       showView('viewCompleteProfile');
       initCompleteProfileView();
     } else {
+      window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.PARTY_HUB);
       showView('viewParty');
       initPartyHomeView();
     }
   } catch (err) {
     console.warn('[Auth] Could not check auth status:', err.message);
-    if (headerAuthButtons) headerAuthButtons.style.display = 'none';
+    window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.LOGGED_OUT);
     showLanding();
   }
 }
@@ -6710,6 +6709,7 @@ function initCompleteProfileView() {
         return;
       }
       toast('✅ Profile complete! Welcome to Phone Party!');
+      window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.PARTY_HUB);
       showView('viewParty');
       initPartyHomeView();
     } catch (err) {
@@ -9419,9 +9419,8 @@ async function handleSignup() {
 async function handleLogout() {
   await logOut();
   state.userTier = USER_TIER.FREE;
-  // Hide header icons
-  const headerAuthButtons = document.getElementById('headerAuthButtons');
-  if (headerAuthButtons) headerAuthButtons.style.display = 'none';
+  // Transition to logged-out state (hides nav, shows landing)
+  window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.LOGGED_OUT);
   showView('viewLanding');
   showToast('👋 Logged out');
 }

@@ -757,3 +757,88 @@ WebSocket message types:
 - `ROOM` - Broadcast room state updates
 - `ENDED` - Party ended notification
 
+
+---
+
+## 📱 Mobile Builds (Capacitor)
+
+Phone Party ships as a PWA and can be packaged as a native Android / iOS app using [Capacitor](https://capacitorjs.com/).
+
+### Prerequisites
+
+Install the Capacitor CLI and platform dependencies:
+
+```bash
+npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios
+npx cap init "Phone Party" com.houseparty.syncspeaker --web-dir public
+```
+
+> The `capacitor.config.json` at the repo root is already pre-filled with the correct `appId`, `appName`, and `webDir`.
+
+### Sync web assets to native projects
+
+After any frontend change, copy the latest web files into the native platforms:
+
+```bash
+npm run cap:sync   # equivalent to: npx cap sync
+```
+
+### Android (Android Studio)
+
+1. Install [Android Studio](https://developer.android.com/studio).
+2. Run `npm run cap:android` to open the project in Android Studio.
+3. Connect a device or start an emulator.
+4. Click **Run ▶** in Android Studio.
+
+To run directly from the terminal:
+
+```bash
+npm run cap:run:android
+```
+
+### iOS (Xcode)
+
+1. Install [Xcode](https://developer.apple.com/xcode/) (macOS only).
+2. Run `npm run cap:ios` to open the project in Xcode.
+3. Select your target device or simulator.
+4. Click **Run ▶** in Xcode.
+
+To run directly from the terminal:
+
+```bash
+npm run cap:run:ios
+```
+
+### Connecting to the Cloud Run backend
+
+For Capacitor builds to reach the production backend, set the `server.url` in `capacitor.config.json`:
+
+```json
+{
+  "server": {
+    "url": "https://YOUR_CLOUD_RUN_URL",
+    "cleartext": true
+  }
+}
+```
+
+Leave `server.url` empty (or remove the `server` block) to use the bundled web files directly.
+
+---
+
+## 🏗️ App State Machine
+
+View switching is managed by `ui/stateMachine.js`.  All auth-gated navigation goes through:
+
+```js
+window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.PARTY_HUB);
+```
+
+| State | View shown | Header nav |
+|---|---|---|
+| `LOGGED_OUT` | Landing page | Hidden |
+| `PROFILE_INCOMPLETE` | Complete Profile form | Visible |
+| `PARTY_HUB` | Create / Join party hub | Visible |
+| `IN_PARTY` | Party session view | Visible |
+
+Tests live in `nav-auth.test.js` and use jest-environment-jsdom.
