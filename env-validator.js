@@ -32,16 +32,18 @@ function isTestEnv() {
 const ENV_SPEC = {
   // Critical production requirements
   REDIS_URL: {
-    required: isProductionEnv() && !isTestEnv(),
+    required: false,
+    stronglyRecommended: isProductionEnv() && !isTestEnv(),
     category: 'Redis',
     description: 'Redis connection URL for multi-device sync',
     example: 'rediss://default:password@redis.example.com:6379',
     securityImpact: 'HIGH',
-    failureImpact: 'Multi-device sync and party discovery will fail'
+    failureImpact: 'Multi-device sync and party discovery will fall back to in-memory mode'
   },
   
   DATABASE_URL: {
-    required: isProductionEnv() && !isTestEnv(),
+    required: false,
+    stronglyRecommended: isProductionEnv() && !isTestEnv(),
     category: 'Database',
     description: 'PostgreSQL connection string',
     example: 'postgresql://user:pass@db.example.com:5432/phoneparty',
@@ -291,9 +293,9 @@ function validateEnvironment() {
   const hasRedisHost = !!process.env.REDIS_HOST;
   
   if (isProduction && !hasRedisUrl && !hasRedisHost) {
-    result.addError(
+    result.addWarning(
       'REDIS',
-      'No Redis configuration found. Set REDIS_URL for production.'
+      'No Redis configuration found. Server will run in fallback mode. Set REDIS_URL for multi-device sync.'
     );
   }
   
@@ -302,9 +304,9 @@ function validateEnvironment() {
   const hasDbHost = !!process.env.DB_HOST;
   
   if (isProduction && !hasDatabaseUrl && !hasDbHost) {
-    result.addError(
+    result.addWarning(
       'DATABASE',
-      'No database configuration found. Set DATABASE_URL for production.'
+      'No database configuration found. User auth and subscriptions will not work. Set DATABASE_URL for production.'
     );
   }
   
