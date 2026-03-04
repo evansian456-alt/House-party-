@@ -9801,7 +9801,7 @@ async function handleSignup() {
     return;
   }
   
-  const result = await signUp(email, password, djName, true);
+  const result = await signUp(email, password, djName, termsAccepted);
   
   if (result.success) {
     showToast('✅ Welcome to Phone Party! Account created successfully!');

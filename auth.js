@@ -67,7 +67,7 @@ async function signUp(email, password, djName = '', termsAccepted = false) {
         email,
         password,
         djName: djName.trim(),
-        termsAccepted: true
+        termsAccepted
       })
     });
     
