@@ -55,6 +55,7 @@ async function signUp(email, password, djName = '') {
   try {
     const response = await fetch('/api/auth/signup', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json'
       },
@@ -95,6 +96,7 @@ async function logIn(email, password) {
   try {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json'
       },
@@ -129,7 +131,8 @@ async function logIn(email, password) {
 async function logOut() {
   try {
     await fetch('/api/auth/logout', {
-      method: 'POST'
+      method: 'POST',
+      credentials: 'include'
     });
     
     localStorage.removeItem(CURRENT_USER_KEY);
@@ -147,7 +150,7 @@ async function logOut() {
  */
 async function getCurrentUser() {
   try {
-    const response = await fetch('/api/me');
+    const response = await fetch('/api/me', { credentials: 'include' });
     
     if (!response.ok) {
       if (response.status === 401) {

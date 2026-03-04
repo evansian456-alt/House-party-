@@ -6855,7 +6855,7 @@ function attemptAddPhone() {
 async function initAuthFlow() {
   const headerAuthButtons = document.getElementById('headerAuthButtons');
   try {
-    const response = await fetch('/api/me');
+    const response = await fetch('/api/me', { credentials: 'include' });
     if (!response.ok) {
       // Not authenticated — hide auth buttons and transition to LOGGED_OUT
       if (headerAuthButtons) headerAuthButtons.style.display = 'none';
@@ -7064,7 +7064,7 @@ function initBillingBox() {
  */
 async function refreshMe() {
   try {
-    const res = await fetch('/api/me');
+    const res = await fetch('/api/me', { credentials: 'include' });
     if (!res.ok) return false;
     const data = await res.json();
     state.userTier = data.tier || USER_TIER.FREE;
@@ -11105,7 +11105,7 @@ async function loadMyProfile() {
   if (profileContent) profileContent.classList.add('hidden');
   
   try {
-    const response = await fetch('/api/me');
+    const response = await fetch('/api/me', { credentials: 'include' });
     if (!response.ok) throw new Error('Failed to load profile');
     
     const data = await response.json();
