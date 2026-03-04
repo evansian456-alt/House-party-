@@ -5214,6 +5214,140 @@ app.post("/api/referral/track", apiLimiter, authMiddleware.requireAuth, async (r
 });
 
 // ============================================================================
+// STRIPE PRICE IDs (canonical product identifiers)
+// ============================================================================
+const STRIPE_PRICE_PARTY_PASS = process.env.STRIPE_PRICE_PARTY_PASS || 'price_1T730tK3GhmyOKSB36mifw84';
+const STRIPE_PRICE_PRO_MONTHLY = process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_1T733rK3GhmyOKSBsghjQPUZ';
+const STRIPE_SERVICE_URL = 'https://syncspeaker-262593928124.us-central1.run.app';
+const STRIPE_SUCCESS_URL = (process.env.PUBLIC_BASE_URL || STRIPE_SERVICE_URL) + '/payment-success';
+const STRIPE_CANCEL_URL = (process.env.PUBLIC_BASE_URL || STRIPE_SERVICE_URL) + '/payment-cancel';
+
+// ============================================================================
+// BASKET / CART SYSTEM
+// ============================================================================
+
+// In-memory basket store (keyed by userId). Cleared after successful checkout.
+const userBaskets = new Map();
+
+app.get('/api/basket', apiLimiter, authMiddleware.requireAuth, (req, res) => {
+  const userId = req.user.userId;
+  return res.json({ basket: userBaskets.get(userId) || [] });
+});
+
+app.post('/api/basket/add', apiLimiter, authMiddleware.requireAuth, (req, res) => {
+  const userId = req.user.userId;
+  const { priceId } = req.body;
+  if (!priceId) return res.status(400).json({ error: 'priceId is required' });
+  const basket = userBaskets.get(userId) || [];
+  if (!basket.includes(priceId)) basket.push(priceId);
+  userBaskets.set(userId, basket);
+  return res.json({ basket });
+});
+
+app.delete('/api/basket/item/:priceId', apiLimiter, authMiddleware.requireAuth, (req, res) => {
+  const userId = req.user.userId;
+  const priceId = req.params.priceId;
+  const basket = (userBaskets.get(userId) || []).filter(p => p !== priceId);
+  userBaskets.set(userId, basket);
+  return res.json({ basket });
+});
+
+app.post('/api/basket/checkout', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  if (!stripeClient) return res.status(503).json({ error: 'Billing not configured. STRIPE_SECRET_KEY is missing.' });
+  const userId = req.user.userId;
+  const basket = userBaskets.get(userId) || [];
+  if (basket.length === 0) return res.status(400).json({ error: 'Basket is empty' });
+  const hasSubscription = basket.some(p => p === STRIPE_PRICE_PRO_MONTHLY);
+  const mode = hasSubscription ? 'subscription' : 'payment';
+  try {
+    const session = await stripeClient.checkout.sessions.create({
+      mode,
+      line_items: basket.map(priceId => ({ price: priceId, quantity: 1 })),
+      success_url: STRIPE_SUCCESS_URL,
+      cancel_url: STRIPE_CANCEL_URL,
+      metadata: { userId }
+    });
+    userBaskets.delete(userId);
+    return res.json({ sessionId: session.id, url: session.url });
+  } catch (error) {
+    console.error('[BasketCheckout] Error:', error.message);
+    return res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// ============================================================================
+// STRIPE CHECKOUT SESSION ENDPOINT
+// ============================================================================
+
+/**
+ * POST /api/stripe/create-checkout-session
+ * Creates a Stripe Checkout Session for a specific price.
+ * mode: "payment" for Party Pass, "subscription" for Pro.
+ */
+app.post('/api/stripe/create-checkout-session', apiLimiter, authMiddleware.optionalAuth, async (req, res) => {
+  if (!stripeClient) {
+    return res.status(503).json({ error: 'Billing not configured. STRIPE_SECRET_KEY is missing.' });
+  }
+  const { priceId, userId } = req.body;
+  if (!priceId || !userId) {
+    return res.status(400).json({ error: 'priceId and userId are required' });
+  }
+  // If authenticated, userId in body must match the authenticated user
+  if (req.user && req.user.userId && req.user.userId !== String(userId)) {
+    return res.status(403).json({ error: 'userId does not match authenticated user' });
+  }
+  const mode = priceId === STRIPE_PRICE_PARTY_PASS ? 'payment' : 'subscription';
+  try {
+    const session = await stripeClient.checkout.sessions.create({
+      mode,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: STRIPE_SUCCESS_URL,
+      cancel_url: STRIPE_CANCEL_URL,
+      metadata: { userId: String(userId), priceId }
+    });
+    return res.json({ sessionId: session.id });
+  } catch (error) {
+    console.error('[StripeCheckout] Error creating session:', error.message);
+    return res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// ============================================================================
+// ADMIN STATS ENDPOINT
+// ============================================================================
+
+/**
+ * GET /api/admin/stats
+ * Returns live platform statistics. Restricted to the admin email.
+ */
+app.get('/api/admin/stats', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  if (req.user.email !== 'ianevans2023@outlook.com') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  try {
+    const [totalRes, activeRes, passRes, proRes, todayRes, totalRevRes] = await Promise.all([
+      db.query('SELECT COUNT(*) AS count FROM users'),
+      db.query("SELECT COUNT(*) AS count FROM users WHERE last_login > NOW() - INTERVAL '30 days'"),
+      db.query('SELECT COUNT(*) AS count FROM user_upgrades WHERE party_pass_expires_at > NOW()'),
+      db.query('SELECT COUNT(*) AS count FROM user_upgrades WHERE pro_monthly_active = true'),
+      db.query('SELECT COALESCE(SUM(amount), 0) AS total FROM revenue_metrics WHERE created_at >= CURRENT_DATE'),
+      db.query('SELECT COALESCE(SUM(amount), 0) AS total FROM revenue_metrics')
+    ]);
+    return res.json({
+      totalUsers: parseInt(totalRes.rows[0].count, 10),
+      activeUsers: parseInt(activeRes.rows[0].count, 10),
+      partyPassUsers: parseInt(passRes.rows[0].count, 10),
+      proUsers: parseInt(proRes.rows[0].count, 10),
+      revenueToday: parseFloat(todayRes.rows[0].total),
+      revenueTotal: parseFloat(totalRevRes.rows[0].total)
+    });
+  } catch (error) {
+    console.error('[AdminStats] Error:', error.message);
+    return res.status(500).json({ error: 'Failed to retrieve stats' });
+  }
+});
+
+// ============================================================================
 // BILLING ENDPOINTS (Stripe Checkout subscriptions)
 // ============================================================================
 
@@ -5488,38 +5622,150 @@ async function handleBillingWebhookEvent(event) {
 // Stripe webhook handler (raw body required for signature verification)
 // Note: Webhooks should have lenient rate limiting as they're externally triggered
 app.post("/api/stripe/webhook", rateLimit({ windowMs: 60000, max: 100 }), express.raw({ type: 'application/json' }), async (req, res) => {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error('[Stripe] Webhook secret not configured');
+    return res.status(500).json({ error: 'Webhook not configured' });
+  }
+  if (!stripeClient) {
+    console.error('[Stripe] Stripe client not available');
+    return res.status(503).json({ error: 'Billing not configured' });
+  }
+
+  let event;
   try {
-    const signature = req.headers['stripe-signature'];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    event = stripeClient.webhooks.constructEvent(req.body, req.headers['stripe-signature'], webhookSecret);
+  } catch (err) {
+    console.error('[Stripe] Signature verification failed:', err.message);
+    return res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
+  }
 
-    if (!webhookSecret) {
-      console.error('[Stripe] Webhook secret not configured');
-      return res.status(500).json({ error: 'Webhook not configured' });
-    }
+  // Respond 200 immediately; process asynchronously
+  res.json({ received: true });
 
-    // Verify signature
-    const isValid = verifyStripeSignature(req.body, signature, webhookSecret);
-    if (!isValid) {
-      console.error('[Stripe] Invalid webhook signature');
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
-
-    // Parse event
-    const event = JSON.parse(req.body.toString());
-
-    // Process webhook
-    const result = await processStripeWebhook(event, db, referralSystem);
-
-    if (result.success) {
-      return res.json({ received: true });
-    } else {
-      return res.status(500).json({ error: result.error });
-    }
-  } catch (error) {
-    console.error('[Stripe] Webhook error:', error.message);
-    return res.status(500).json({ error: 'Webhook processing failed' });
+  try {
+    await handleStripeWebhookEvent(event);
+  } catch (err) {
+    console.error('[Stripe] Webhook handler error:', err.message);
   }
 });
+
+/**
+ * Handle a verified Stripe webhook event.
+ */
+async function handleStripeWebhookEvent(event) {
+  const { type, data } = event;
+  const obj = data.object;
+  console.log(`[Stripe] Processing webhook event: ${type}`);
+
+  switch (type) {
+    case 'checkout.session.completed': {
+      const userId = obj.metadata?.userId || obj.client_reference_id;
+      if (!userId) {
+        console.error('[Stripe] checkout.session.completed: no userId in metadata');
+        return;
+      }
+      // Get price ID from metadata (set at session creation) or expand line_items
+      let priceId = obj.metadata?.priceId;
+      if (!priceId) {
+        try {
+          const expanded = await stripeClient.checkout.sessions.retrieve(obj.id, { expand: ['line_items'] });
+          priceId = expanded.line_items?.data?.[0]?.price?.id;
+        } catch (err) {
+          console.error('[Stripe] Failed to retrieve line_items:', err.message);
+        }
+      }
+      if (priceId === STRIPE_PRICE_PARTY_PASS) {
+        const expiresAt = new Date(Date.now() + PARTY_PASS_DURATION_MS);
+        await db.query(
+          `INSERT INTO user_upgrades (user_id, party_pass_expires_at)
+           VALUES ($1, $2)
+           ON CONFLICT (user_id) DO UPDATE SET party_pass_expires_at = $2, updated_at = NOW()`,
+          [userId, expiresAt]
+        );
+        await db.query(`UPDATE users SET tier = 'PARTY_PASS' WHERE id = $1`, [userId]);
+        console.log(`[Stripe] Party Pass activated for user ${userId} (expires ${expiresAt.toISOString()})`);
+      } else if (priceId === STRIPE_PRICE_PRO_MONTHLY) {
+        await db.query(
+          `INSERT INTO user_upgrades (user_id, pro_monthly_active, pro_monthly_started_at, pro_monthly_renewal_provider)
+           VALUES ($1, true, NOW(), 'stripe')
+           ON CONFLICT (user_id) DO UPDATE SET pro_monthly_active = true, pro_monthly_started_at = NOW(),
+             pro_monthly_renewal_provider = 'stripe', updated_at = NOW()`,
+          [userId]
+        );
+        await db.query(
+          `UPDATE users SET tier = 'PRO', subscription_status = 'active' WHERE id = $1`,
+          [userId]
+        );
+        console.log(`[Stripe] Pro subscription activated for user ${userId}`);
+      } else {
+        console.log(`[Stripe] checkout.session.completed: unrecognised priceId=${priceId}`);
+      }
+      break;
+    }
+
+    case 'invoice.paid': {
+      const subscriptionId = obj.subscription;
+      if (!subscriptionId) return;
+      const periodEnd = obj.period_end ? new Date(obj.period_end * 1000) : null;
+      await db.query(
+        `UPDATE users SET subscription_status = 'active', tier = 'PRO'${periodEnd ? ', current_period_end = $2' : ''}
+         WHERE stripe_subscription_id = $1`,
+        periodEnd ? [subscriptionId, periodEnd] : [subscriptionId]
+      );
+      console.log(`[Stripe] invoice.paid: subscription=${subscriptionId}`);
+      break;
+    }
+
+    case 'invoice.payment_failed': {
+      const subscriptionId = obj.subscription;
+      if (!subscriptionId) return;
+      await db.query(
+        `UPDATE users SET subscription_status = 'past_due', tier = 'FREE'
+         WHERE stripe_subscription_id = $1`,
+        [subscriptionId]
+      );
+      await db.query(
+        `UPDATE user_upgrades SET pro_monthly_active = false, updated_at = NOW()
+         WHERE user_id = (SELECT id FROM users WHERE stripe_subscription_id = $1)`,
+        [subscriptionId]
+      );
+      console.log(`[Stripe] invoice.payment_failed: subscription=${subscriptionId}`);
+      break;
+    }
+
+    case 'customer.subscription.deleted': {
+      const subscriptionId = obj.id;
+      const customerId = obj.customer;
+      let userId = obj.metadata?.userId;
+      if (!userId) {
+        const r = await db.query('SELECT id FROM users WHERE stripe_customer_id = $1', [customerId]);
+        if (r.rows.length > 0) userId = r.rows[0].id;
+      }
+      if (!userId) {
+        const r = await db.query('SELECT id FROM users WHERE stripe_subscription_id = $1', [subscriptionId]);
+        if (r.rows.length > 0) userId = r.rows[0].id;
+      }
+      if (!userId) {
+        console.error('[Stripe] customer.subscription.deleted: no userId found');
+        return;
+      }
+      await db.query(
+        `UPDATE users SET subscription_status = 'canceled', tier = 'FREE' WHERE id = $1`,
+        [userId]
+      );
+      await db.query(
+        `UPDATE user_upgrades SET pro_monthly_active = false, updated_at = NOW() WHERE user_id = $1`,
+        [userId]
+      );
+      console.log(`[Stripe] customer.subscription.deleted: userId=${userId}`);
+      break;
+    }
+
+    default:
+      console.log(`[Stripe] Unhandled event type: ${type}`);
+  }
+}
 
 // Sentry error handler must be registered after all controllers and before other error handlers
 if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
