@@ -143,13 +143,8 @@ test.describe('Auth flow', () => {
     await page.locator('#loginPassword').fill(user.password);
     await page.locator('#formLogin button[type="submit"]').click();
 
-    // After login the app should no longer show the login form
-    await page.waitForTimeout(2000);
-    const loginForm = page.locator('#formLogin, form').filter({ hasText: /log in|sign in/i });
-    // Either the form is gone or the URL changed
-    const visible = await loginForm.isVisible().catch(() => false);
-    // Acceptable: form hidden OR we navigated away from login
-    expect(!visible || !page.url().includes('#login')).toBeTruthy();
+    // After login the app navigates away from the login view — wait deterministically
+    await expect(page.locator('#viewLogin')).not.toBeVisible({ timeout: 10000 });
   });
 
   test('duplicate signup returns 409 with "Account already exists"', async ({ request }) => {
