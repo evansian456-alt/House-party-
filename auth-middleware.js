@@ -6,7 +6,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { isValidEmail, isValidPassword } = require('./auth-utils');
-const { isProduction: isProductionEnv } = require('./env-validator');
+const { isProduction: isProductionEnv, isTest: isTestEnv } = require('./env-validator');
 
 // ============================================================================
 // ADMIN EMAIL ALLOWLIST
@@ -28,19 +28,19 @@ function isAdminEmail(email) {
   return ADMIN_EMAILS.includes(email.trim().toLowerCase());
 }
 
-// JWT_SECRET is REQUIRED in production-like environments (NODE_ENV=production,
-// RAILWAY_ENVIRONMENT set, or REDIS_URL set). In development/test a per-process
-// random fallback is used so the server starts without crashing, but tokens will
-// be invalidated on restart and will not be shared across multiple instances.
-const _isProductionLike = isProductionEnv();
-if (_isProductionLike && !process.env.JWT_SECRET) {
+// JWT_SECRET is REQUIRED in production-like environments. Use the same production
+// detection logic as env-validator.js to cover NODE_ENV=production, RAILWAY_ENVIRONMENT,
+// and REDIS_URL deployments. In development/test a per-process random fallback is used.
+// Test mode always overrides production detection so unit tests can run with REDIS_URL set.
+const _isProduction = isProductionEnv() && !isTestEnv();
+if (_isProduction && !process.env.JWT_SECRET) {
   throw new Error('[Auth] JWT_SECRET environment variable is required in production. Set it via Cloud Run env vars or GCP Secret Manager.');
 }
 const JWT_SECRET = process.env.JWT_SECRET || require('crypto').randomBytes(48).toString('hex');
 
 if (!process.env.JWT_SECRET) {
   console.warn('[Auth] WARNING: JWT_SECRET not set — using a random per-process dev fallback. All existing tokens will be invalidated on restart. Set JWT_SECRET before deploying to production!');
-} else if (!_isProductionLike) {
+} else if (!_isProduction) {
   console.warn('[Auth] WARNING: Using JWT secret - development mode');
 }
 
@@ -85,16 +85,16 @@ function verifyToken(token) {
  */
 function requireAuth(req, res, next) {
   const token = req.cookies?.auth_token;
-  
+
   if (!token) {
     return res.status(401).json({ error: 'Authentication required' });
   }
-  
+
   const decoded = verifyToken(token);
   if (!decoded) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
-  
+
   req.user = decoded;
   next();
 }
@@ -104,14 +104,14 @@ function requireAuth(req, res, next) {
  */
 function optionalAuth(req, res, next) {
   const token = req.cookies?.auth_token;
-  
+
   if (token) {
     const decoded = verifyToken(token);
     if (decoded) {
       req.user = decoded;
     }
   }
-  
+
   next();
 }
 
