@@ -1417,7 +1417,8 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      sameSite: 'lax'
+      sameSite: 'lax',
+      path: '/'
     });
 
     res.status(201).json({
@@ -1496,7 +1497,8 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      sameSite: 'lax'
+      sameSite: 'lax',
+      path: '/'
     });
 
     res.json({
@@ -1519,7 +1521,7 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
  * Log out current user
  */
 app.post("/api/auth/logout", apiLimiter, (req, res) => {
-  res.clearCookie('auth_token');
+  res.clearCookie('auth_token', { path: '/' });
   res.json({ success: true });
 });
 
