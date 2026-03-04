@@ -1,231 +1,498 @@
 /**
  * Referral UI Manager
- * 
- * Manages referral system UI:
- * - Fetch and display referral stats
- * - Show invite link
- * - Copy/share functionality
- * - Progress toward rewards
+ *
+ * Handles the Invite Friends page/modal:
+ * - Displays referral stats and milestone progress
+ * - Social share buttons (Web Share API + explicit platform links)
+ * - Live polling every 10 s to refresh progress
+ * - Celebration popup when a milestone is newly unlocked
+ *
+ * Analytics events fired (if window.analytics exists):
+ *   referral_promo_viewed, referral_promo_clicked,
+ *   referral_share_opened, referral_link_copied
  */
+
+const SHARE_PLATFORMS = [
+  { id: 'whatsapp',  label: '💬 WhatsApp',  urlFn: (u, t) => `https://wa.me/?text=${encodeURIComponent(t + '\n' + u)}` },
+  { id: 'facebook',  label: '👍 Facebook',  urlFn: (u)    => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}` },
+  { id: 'sms',       label: '📱 SMS',       urlFn: (u, t) => `sms:?&body=${encodeURIComponent(t + '\n' + u)}` },
+  { id: 'email',     label: '📧 Email',     urlFn: (u, t) => `mailto:?subject=${encodeURIComponent('Join my Phone Party 🎉')}&body=${encodeURIComponent(t + '\n' + u)}` },
+  { id: 'snapchat',  label: '👻 Snapchat',  native: true  },
+  { id: 'tiktok',    label: '🎵 TikTok',    native: true  },
+];
+
+const MILESTONES = [
+  { at: 3,  label: '30 min Party Pass' },
+  { at: 5,  label: '1 hr Party Pass'   },
+  { at: 10, label: '1 Party Pass session' },
+  { at: 20, label: '3 Party Pass sessions' },
+  { at: 50, label: '1 month Pro'       },
+];
+
+function shareText(inviteUrl) {
+  return `Join my Phone Party 🎉\nDownload the app and join my party instantly.\nUse my invite link: ${inviteUrl}`;
+}
+
+function buildUrl(platform, inviteUrl) {
+  const text = shareText(inviteUrl);
+  if (platform.urlFn) return platform.urlFn(inviteUrl, text);
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class ReferralUI {
   constructor() {
-    this.modal = document.getElementById('modalReferral');
-    this.btnReferral = document.getElementById('btnReferral');
-    this.btnClose = document.getElementById('btnCloseReferralModal');
-    this.btnCopyLink = document.getElementById('btnCopyReferralLink');
-    this.btnShareLink = document.getElementById('btnShareReferralLink');
-    
-    // Display elements
-    this.totalCount = document.getElementById('referralTotalCount');
-    this.paidCount = document.getElementById('referralPaidCount');
-    this.rewardsEarned = document.getElementById('referralRewardsEarned');
-    this.progress = document.getElementById('referralProgress');
-    this.progressBar = document.getElementById('referralProgressBar');
-    this.codeDisplay = document.getElementById('referralCodeDisplay');
-    this.linkInput = document.getElementById('referralLinkInput');
-    
-    this.stats = null;
-    this.setupEventListeners();
+    this.stats       = null;
+    this._pollTimer  = null;
+    this._lastCount  = null;
+    this._nudgeShown = false;
+    this._init();
   }
 
-  setupEventListeners() {
-    if (this.btnReferral) {
-      this.btnReferral.addEventListener('click', () => this.show());
-    }
+  _init() {
+    // Build the Invite Friends view if the container exists
+    this._buildInvitePage();
+    this._bindStaticButtons();
+    this._bindPromoElements();
+    this._maybeShowNudge();
+    this._trackPromoViewed();
+  }
 
-    if (this.btnClose) {
-      this.btnClose.addEventListener('click', () => this.hide());
-    }
+  // ─── Invite Friends page ───────────────────────────────────────────────────
 
-    if (this.btnCopyLink) {
-      this.btnCopyLink.addEventListener('click', () => this.copyLink());
-    }
+  _buildInvitePage() {
+    const container = document.getElementById('viewInviteFriends');
+    if (!container) return;
 
-    if (this.btnShareLink) {
-      this.btnShareLink.addEventListener('click', () => this.shareLink());
-    }
+    container.innerHTML = `
+      <div class="invite-page-inner" style="max-width:480px;margin:0 auto;padding:1rem;">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1.5rem;">
+          <button class="btn" id="btnInviteBack">← Back</button>
+          <h2 style="margin:0;">🎁 Invite Friends</h2>
+        </div>
 
-    // Close on click outside
-    if (this.modal) {
-      this.modal.addEventListener('click', (e) => {
-        if (e.target === this.modal) {
-          this.hide();
-        }
+        <!-- Progress bar -->
+        <div class="referral-progress-card glass-card" style="margin-bottom:1rem;">
+          <div class="progress-header" style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+            <span id="inviteProgressLabel">Invite friends to earn rewards</span>
+            <span id="inviteProgressCount" style="font-weight:700;color:#9D4EDD;">0 / 3</span>
+          </div>
+          <div class="progress-bar" style="background:rgba(255,255,255,0.1);border-radius:99px;height:12px;overflow:hidden;">
+            <div class="progress-fill" id="inviteProgressBar" style="width:0%;background:linear-gradient(90deg,#9D4EDD,#5AA9FF);height:100%;border-radius:99px;transition:width 0.5s ease;"></div>
+          </div>
+          <div id="inviteNextReward" style="margin-top:0.5rem;font-size:0.85rem;color:#aaa;"></div>
+        </div>
+
+        <!-- Milestones list -->
+        <div class="glass-card" style="margin-bottom:1rem;" id="inviteMilestones"></div>
+
+        <!-- Rewards balance -->
+        <div class="glass-card" id="inviteRewardBalance" style="margin-bottom:1rem;display:none;">
+          <h4 style="margin-bottom:0.5rem;">🏆 Your Rewards</h4>
+          <div id="inviteRewardBalanceContent"></div>
+        </div>
+
+        <!-- Invite link -->
+        <div class="glass-card" style="margin-bottom:1rem;">
+          <div class="lbl" style="margin-bottom:0.5rem;">Your Invite Link</div>
+          <div style="display:flex;gap:0.5rem;">
+            <input type="text" id="inviteLinkInput" class="input-field" readonly
+                   style="flex:1;font-size:0.85rem;" value="Loading…" />
+            <button class="btn primary" id="btnCopyInviteLink" style="white-space:nowrap;">📋 Copy</button>
+          </div>
+        </div>
+
+        <!-- Share buttons -->
+        <div class="glass-card">
+          <div class="lbl" style="margin-bottom:0.75rem;">Share via</div>
+          <div style="display:flex;flex-wrap:wrap;gap:0.5rem;" id="inviteShareButtons">
+            <button class="btn primary" id="btnNativeShare" style="flex:1 0 auto;">📤 Share</button>
+            ${SHARE_PLATFORMS.map(p => `
+              <button class="btn invite-share-btn" data-platform="${p.id}"
+                      style="flex:1 0 auto;">${p.label}</button>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- How it works -->
+        <div class="glass-card" style="margin-top:1rem;font-size:0.85rem;color:#aaa;">
+          <h4 style="color:#fff;margin-bottom:0.5rem;">✅ What counts as a valid referral?</h4>
+          <ol style="padding-left:1.2rem;line-height:1.8;">
+            <li>Friend opens your invite link</li>
+            <li>Friend creates an account</li>
+            <li>Friend completes their DJ profile</li>
+            <li>Friend creates or joins a party</li>
+          </ol>
+        </div>
+      </div>
+    `;
+
+    // Back button
+    const backBtn = document.getElementById('btnInviteBack');
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        if (typeof window.setView === 'function') window.setView('viewAuthHome');
       });
     }
+
+    // Copy link button
+    const copyBtn = document.getElementById('btnCopyInviteLink');
+    if (copyBtn) copyBtn.addEventListener('click', () => this._copyLink());
+
+    // Native share button
+    const nativeBtn = document.getElementById('btnNativeShare');
+    if (nativeBtn) nativeBtn.addEventListener('click', () => this._nativeShare());
+
+    // Platform share buttons
+    document.querySelectorAll('.invite-share-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const platformId = btn.dataset.platform;
+        this._sharePlatform(platformId);
+      });
+    });
+
+    // Render milestones
+    this._renderMilestones();
   }
 
-  /**
-   * Show referral modal and load stats
-   */
-  async show() {
-    if (!this.modal) return;
-    
-    this.modal.classList.remove('hidden');
-    await this.loadStats();
+  _renderMilestones() {
+    const el = document.getElementById('inviteMilestones');
+    if (!el) return;
+    const completed = this.stats?.referralsCompleted || 0;
+    el.innerHTML = `
+      <h4 style="margin-bottom:0.75rem;">🏅 Milestones</h4>
+      ${MILESTONES.map(m => {
+        const done = completed >= m.at;
+        return `<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;opacity:${done ? 1 : 0.6};">
+          <span style="font-size:1.2rem;">${done ? '✅' : '🔒'}</span>
+          <span><strong>${m.at} referrals</strong> → ${m.label}</span>
+        </div>`;
+      }).join('')}
+    `;
   }
 
-  /**
-   * Hide referral modal
-   */
-  hide() {
-    if (this.modal) {
-      this.modal.classList.add('hidden');
-    }
-  }
+  // ─── Stats loading & UI update ─────────────────────────────────────────────
 
-  /**
-   * Load referral stats from API
-   */
   async loadStats() {
     try {
-      const response = await fetch('/api/referral/stats', {
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
+      const res = await fetch('/api/referral/me', { credentials: 'include' });
+      if (!res.ok) return;
+      this.stats = await res.json();
+      this._updateUI();
 
-      if (!response.ok) {
-        throw new Error('Failed to load referral stats');
+      // Celebrate if a new milestone was just unlocked
+      if (this._lastCount !== null && this.stats.referralsCompleted > this._lastCount) {
+        this._checkAndCelebrate(this._lastCount, this.stats.referralsCompleted);
       }
-
-      this.stats = await response.json();
-      this.updateUI();
-    } catch (error) {
-      console.error('[Referral] Error loading stats:', error);
-      this.showError();
-    }
+      this._lastCount = this.stats.referralsCompleted;
+    } catch (_) { /* silent */ }
   }
 
-  /**
-   * Update UI with loaded stats
-   */
-  updateUI() {
+  _updateUI() {
     if (!this.stats) return;
+    const s = this.stats;
 
-    // Update counts
-    if (this.totalCount) {
-      this.totalCount.textContent = this.stats.totalReferrals || 0;
+    // Progress bar
+    const pBar  = document.getElementById('inviteProgressBar');
+    const pCnt  = document.getElementById('inviteProgressCount');
+    const pNext = document.getElementById('inviteNextReward');
+    const pLbl  = document.getElementById('inviteProgressLabel');
+    if (pBar) pBar.style.width = `${s.progressPercent || 0}%`;
+    if (pCnt) pCnt.textContent = `${s.progressCurrent || 0} / ${s.progressTarget || 3}`;
+    if (pNext && s.nextMilestone) {
+      const nm = MILESTONES.find(m => m.at === s.nextMilestone);
+      if (nm) pNext.textContent = `Next: ${nm.label} at ${nm.at} referrals`;
+    }
+    if (pLbl) pLbl.textContent = 'Invite friends to earn rewards';
+
+    // Invite link
+    const linkInput = document.getElementById('inviteLinkInput');
+    if (linkInput && s.inviteUrl) linkInput.value = s.inviteUrl;
+
+    // Hub promo tile
+    const hubCount = document.getElementById('referralHubCount');
+    const hubNext  = document.getElementById('referralHubNext');
+    if (hubCount) hubCount.textContent = `${s.referralsCompleted || 0}/${s.progressTarget || 3}`;
+    if (hubNext  && s.nextMilestone) {
+      const nm = MILESTONES.find(m => m.at === s.nextMilestone);
+      if (nm) hubNext.textContent = `Next: ${nm.label}`;
     }
 
-    if (this.paidCount) {
-      this.paidCount.textContent = this.stats.paidReferrals || 0;
+    // Reward balance
+    const balEl  = document.getElementById('inviteRewardBalance');
+    const balCnt = document.getElementById('inviteRewardBalanceContent');
+    const hasBalance = (s.rewardBalanceSeconds > 0 || s.rewardBalanceSessions > 0 || s.proUntil);
+    if (balEl) balEl.style.display = hasBalance ? '' : 'none';
+    if (balCnt && hasBalance) {
+      const parts = [];
+      if (s.rewardBalanceSeconds  > 0) parts.push(`⏱ ${Math.round(s.rewardBalanceSeconds / 60)} min Party Pass time`);
+      if (s.rewardBalanceSessions > 0) parts.push(`🎊 ${s.rewardBalanceSessions} Party Pass session(s)`);
+      if (s.proUntil) parts.push(`⭐ Pro until ${new Date(s.proUntil).toLocaleDateString()}`);
+      balCnt.innerHTML = parts.map(p => `<div style="margin-bottom:0.25rem;">${p}</div>`).join('');
     }
 
-    if (this.rewardsEarned) {
-      this.rewardsEarned.textContent = this.stats.rewardsEarned || 0;
-    }
+    // Modal / old UI elements (backward compat)
+    const totalCount = document.getElementById('referralTotalCount');
+    if (totalCount) totalCount.textContent = s.referralsCompleted || 0;
+    const codeDisp = document.getElementById('referralCodeDisplay');
+    if (codeDisp) codeDisp.textContent = s.referralCode || '---';
+    const linkInp = document.getElementById('referralLinkInput');
+    if (linkInp && s.inviteUrl) linkInp.value = s.inviteUrl;
 
-    // Update progress
-    const progressValue = this.stats.progressTowardReward || 0;
-    if (this.progress) {
-      this.progress.textContent = `${progressValue}/5`;
-    }
+    // Re-render milestones
+    this._renderMilestones();
+  }
 
-    if (this.progressBar) {
-      const percentage = (progressValue / 5) * 100;
-      this.progressBar.style.width = `${percentage}%`;
-    }
+  // ─── Sharing ───────────────────────────────────────────────────────────────
 
-    // Update code and link
-    if (this.codeDisplay && this.stats.referralCode) {
-      this.codeDisplay.textContent = this.stats.referralCode;
-    }
+  _getInviteUrl(platform) {
+    const base = this.stats?.inviteUrl || window.location.origin;
+    return `${base}?utm_source=share&utm_medium=${platform}&utm_campaign=referral`;
+  }
 
-    if (this.linkInput && this.stats.inviteLink) {
-      this.linkInput.value = this.stats.inviteLink;
+  async _nativeShare() {
+    const url  = this._getInviteUrl('native');
+    const text = shareText(url);
+    this._fireEvent('referral_share_opened', { platform: 'native' });
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Join my Phone Party 🎉', text, url });
+      } catch (e) {
+        if (e.name !== 'AbortError') this._copyLink();
+      }
+    } else {
+      this._copyLink();
     }
   }
 
-  /**
-   * Show error state
-   */
-  showError() {
-    if (this.codeDisplay) {
-      this.codeDisplay.textContent = 'ERROR';
-    }
-    if (this.linkInput) {
-      this.linkInput.value = 'Unable to load referral link';
-    }
-  }
+  _sharePlatform(platformId) {
+    const platform = SHARE_PLATFORMS.find(p => p.id === platformId);
+    if (!platform) return;
+    this._fireEvent('referral_share_opened', { platform: platformId });
 
-  /**
-   * Copy referral link to clipboard
-   */
-  async copyLink() {
-    if (!this.linkInput) return;
-
-    try {
-      await navigator.clipboard.writeText(this.linkInput.value);
-      
-      // Show success feedback
-      const originalText = this.btnCopyLink.textContent;
-      this.btnCopyLink.textContent = '✓ Copied!';
-      this.btnCopyLink.style.background = 'rgba(0, 255, 0, 0.3)';
-      
-      setTimeout(() => {
-        this.btnCopyLink.textContent = originalText;
-        this.btnCopyLink.style.background = '';
-      }, 2000);
-    } catch (error) {
-      console.error('[Referral] Failed to copy link:', error);
-      
-      // Fallback: select text for older browsers
-      // Note: document.execCommand is deprecated but kept for legacy browser support
-      this.linkInput.select();
-      document.execCommand('copy');
-      
-      const originalText = this.btnCopyLink.textContent;
-      this.btnCopyLink.textContent = '✓ Copied!';
-      setTimeout(() => {
-        this.btnCopyLink.textContent = originalText;
-      }, 2000);
-    }
-  }
-
-  /**
-   * Share referral link using Web Share API
-   */
-  async shareLink() {
-    if (!this.stats || !this.stats.inviteLink) return;
-
-    const shareData = {
-      title: 'Join Phone Party!',
-      text: 'Turn your phones into a massive party speaker system. Check it out!',
-      url: this.stats.inviteLink
-    };
-
-    try {
+    if (platform.native) {
+      // Snapchat / TikTok: try Web Share API, fallback to copy
       if (navigator.share) {
-        await navigator.share(shareData);
+        const url  = this._getInviteUrl(platformId);
+        const text = shareText(url);
+        navigator.share({ title: 'Join my Phone Party 🎉', text, url })
+          .catch(e => { if (e.name !== 'AbortError') this._copyLink(); });
       } else {
-        // Fallback: copy link
-        await this.copyLink();
+        this._copyLink();
+        const btn = document.querySelector(`[data-platform="${platformId}"]`);
+        if (btn) {
+          const orig = btn.textContent;
+          btn.textContent = '✓ Link copied! Paste in app';
+          setTimeout(() => { btn.textContent = orig; }, 3000);
+        }
       }
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        console.error('[Referral] Error sharing:', error);
-      }
+      return;
+    }
+
+    const url  = this._getInviteUrl(platformId);
+    const link = buildUrl(platform, url);
+    if (link) window.open(link, '_blank', 'noopener,noreferrer');
+  }
+
+  async _copyLink() {
+    const url = this._getInviteUrl('copy');
+    this._fireEvent('referral_link_copied', { url });
+    const copyBtn = document.getElementById('btnCopyInviteLink') ||
+                    document.getElementById('btnCopyReferralLink');
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (_) {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (_2) { /* ignore */ }
+      document.body.removeChild(ta);
+    }
+    if (copyBtn) {
+      const orig = copyBtn.textContent;
+      copyBtn.textContent = '✓ Copied!';
+      copyBtn.style.background = 'rgba(0,255,0,0.3)';
+      setTimeout(() => { copyBtn.textContent = orig; copyBtn.style.background = ''; }, 2000);
     }
   }
 
-  /**
-   * Show/hide referral button based on role
-   */
-  setVisible(isHost) {
-    if (this.btnReferral) {
-      if (isHost) {
-        this.btnReferral.classList.remove('hidden');
-      } else {
-        this.btnReferral.classList.add('hidden');
-      }
+  // ─── Celebration popup ─────────────────────────────────────────────────────
+
+  _checkAndCelebrate(before, after) {
+    const newMilestones = MILESTONES.filter(m => m.at > before && m.at <= after);
+    if (!newMilestones.length) return;
+    const m = newMilestones[newMilestones.length - 1];
+    this._showCelebration(`🎉 Milestone unlocked!\n${m.at} referrals → ${m.label}`);
+  }
+
+  _showCelebration(message) {
+    let el = document.getElementById('referralCelebration');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'referralCelebration';
+      el.style.cssText = `
+        position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+        background:linear-gradient(135deg,#9D4EDD,#5AA9FF);color:#fff;
+        border-radius:16px;padding:1.5rem 2rem;text-align:center;
+        z-index:9999;font-size:1.1rem;font-weight:600;
+        box-shadow:0 8px 32px rgba(0,0,0,0.5);max-width:320px;width:90%;
+        white-space:pre-line;
+      `;
+      document.body.appendChild(el);
     }
+    el.textContent = message;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 5000);
+  }
+
+  // ─── Polling ───────────────────────────────────────────────────────────────
+
+  startPolling(intervalMs = 10000) {
+    this.loadStats();
+    this._pollTimer = setInterval(() => this.loadStats(), intervalMs);
+  }
+
+  stopPolling() {
+    if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+  }
+
+  // ─── Promo elements ────────────────────────────────────────────────────────
+
+  _bindPromoElements() {
+    // Any element with data-nav="viewInviteFriends"
+    document.querySelectorAll('[data-nav="viewInviteFriends"], [data-goto="invite"]').forEach(el => {
+      el.addEventListener('click', () => this.openInvitePage());
+    });
+
+    // Hub promo "Share Invite Link" button
+    const hubShareBtn = document.getElementById('btnHubShareInvite');
+    if (hubShareBtn) {
+      hubShareBtn.addEventListener('click', () => {
+        this._fireEvent('referral_promo_clicked', { location: 'hub' });
+        this.openInvitePage();
+      });
+    }
+
+    // Paywall cross-promo link
+    const paywallLink = document.getElementById('btnPaywallReferralLink');
+    if (paywallLink) {
+      paywallLink.addEventListener('click', () => {
+        this._fireEvent('referral_promo_clicked', { location: 'paywall' });
+        this.openInvitePage();
+      });
+    }
+
+    // Settings menu entry
+    const settingsBtn = document.getElementById('btnSettingsInviteFriends');
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', () => {
+        this._fireEvent('referral_promo_clicked', { location: 'settings' });
+        this.openInvitePage();
+      });
+    }
+  }
+
+  _bindStaticButtons() {
+    // Old modal "Share" button
+    const btnShare = document.getElementById('btnShareReferralLink');
+    if (btnShare) btnShare.addEventListener('click', () => this._nativeShare());
+
+    // Old modal "Copy" button
+    const btnCopy = document.getElementById('btnCopyReferralLink');
+    if (btnCopy) btnCopy.addEventListener('click', () => this._copyLink());
+
+    // Old modal open button
+    const btnReferral = document.getElementById('btnReferral');
+    if (btnReferral) btnReferral.addEventListener('click', () => this.openInvitePage());
+
+    // Old modal close button
+    const btnClose = document.getElementById('btnCloseReferralModal');
+    if (btnClose) btnClose.addEventListener('click', () => {
+      const modal = document.getElementById('modalReferral');
+      if (modal) modal.classList.add('hidden');
+    });
+  }
+
+  openInvitePage() {
+    this._fireEvent('referral_promo_clicked', { location: 'direct' });
+    if (typeof window.setView === 'function' &&
+        document.getElementById('viewInviteFriends')) {
+      window.setView('viewInviteFriends');
+      this.startPolling();
+    } else {
+      // Fallback: show old modal
+      const modal = document.getElementById('modalReferral');
+      if (modal) { modal.classList.remove('hidden'); this.loadStats(); }
+    }
+  }
+
+  // ─── One-time nudge modal ──────────────────────────────────────────────────
+
+  _maybeShowNudge() {
+    // Only show once per browser
+    if (typeof localStorage === 'undefined') return;
+    if (localStorage.getItem('referral_nudge_shown')) return;
+    // Delay to avoid cluttering the first login moment
+    setTimeout(() => this._showNudge(), 3000);
+  }
+
+  _showNudge() {
+    if (typeof localStorage === 'undefined') return;
+    if (localStorage.getItem('referral_nudge_shown')) return;
+
+    const modal = document.getElementById('modalReferralNudge');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    localStorage.setItem('referral_nudge_shown', '1');
+
+    const inviteBtn = document.getElementById('btnNudgeInvite');
+    if (inviteBtn) inviteBtn.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      this.openInvitePage();
+    });
+    const laterBtn = document.getElementById('btnNudgeLater');
+    if (laterBtn) laterBtn.addEventListener('click', () => modal.classList.add('hidden'));
+  }
+
+  // ─── Analytics ─────────────────────────────────────────────────────────────
+
+  _fireEvent(name, props = {}) {
+    try {
+      if (window.analytics?.track) window.analytics.track(name, props);
+    } catch (_) { /* ignore */ }
+  }
+
+  _trackPromoViewed() {
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          this._fireEvent('referral_promo_viewed', { element: e.target.id });
+          obs.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.5 });
+    ['referralLandingBanner', 'referralHubTile'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) obs.observe(el);
+    });
+  }
+
+  // ─── Visibility helpers ────────────────────────────────────────────────────
+
+  setVisible(isAuthenticated) {
+    const btn = document.getElementById('btnReferral');
+    if (btn) btn.classList.toggle('hidden', !isAuthenticated);
+    const tile = document.getElementById('referralHubTile');
+    if (tile) tile.classList.toggle('hidden', !isAuthenticated);
   }
 }
 
-// Export for use in app.js
+// ── Singleton export ──────────────────────────────────────────────────────────
+
+window.ReferralUI = ReferralUI;
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = ReferralUI;
 }

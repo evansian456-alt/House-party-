@@ -995,6 +995,77 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
+// ─── Invite Landing Page ───────────────────────────────────────────────────────
+app.get('/invite/:code', async (req, res) => {
+  const code    = (req.params.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+  const inviteUrl = `${baseUrl}/invite/${code}`;
+
+  // Record the click (fire-and-forget, don't delay the page response)
+  if (referralSystem) {
+    referralSystem.recordClick(code, req.ip, req.headers['user-agent']).catch(() => {});
+  }
+
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>You're invited to Phone Party 🎉</title>
+<!-- Open Graph -->
+<meta property="og:title" content="Join my Phone Party 🎉" />
+<meta property="og:description" content="Turn phones into one massive speaker system. Download the app and join my party instantly!" />
+<meta property="og:image" content="${baseUrl}/icons/icon-512.png" />
+<meta property="og:url" content="${inviteUrl}" />
+<meta property="og:type" content="website" />
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Join my Phone Party 🎉" />
+<meta name="twitter:description" content="Turn phones into one massive speaker system." />
+<meta name="twitter:image" content="${baseUrl}/icons/icon-512.png" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background: #0a0a0f; color: #fff; min-height: 100vh;
+         display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 16px; padding: 2rem; max-width: 420px; width: 100%; text-align: center; }
+  h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+  p  { color: #aaa; margin-bottom: 1.5rem; }
+  .btn { display: block; width: 100%; padding: 0.9rem 1.5rem; border: none;
+         border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer;
+         text-decoration: none; margin-bottom: 0.75rem; }
+  .btn-primary { background: linear-gradient(135deg,#9D4EDD,#5AA9FF); color: #fff; }
+  .code { font-family: monospace; font-size: 1.4rem; letter-spacing: 4px;
+          color: #9D4EDD; background: rgba(157,78,221,0.1);
+          border-radius: 8px; padding: 0.75rem 1rem; margin: 1rem 0; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🎉 Phone Party</h1>
+  <p>You've been invited to join a Phone Party!<br>
+     Turn your phones into one massive speaker system.</p>
+  <div class="code">${code}</div>
+  <a class="btn btn-primary" href="${baseUrl}/?ref=${code}&clickSource=invite_page">
+    🚀 Open Phone Party
+  </a>
+  <p style="font-size:0.8rem;color:#666;">
+    Your referral code is saved automatically.
+  </p>
+</div>
+<script>
+  // Store referral info so the app can pick it up after install / first launch
+  try {
+    localStorage.setItem('referral_code', ${JSON.stringify(code)});
+    localStorage.setItem('referral_ts',   Date.now().toString());
+  } catch(_) {}
+</script>
+</body>
+</html>`);
+});
+
 // Health check endpoint with detailed Redis status
 app.get("/health", async (req, res) => {
   let redisStatus;
@@ -5199,6 +5270,14 @@ app.get("/api/admin/stats", rateLimit({ windowMs: 60000, max: 60 }), authMiddlew
       }));
     } catch (_) { /* non-fatal */ }
 
+    // ── Referral stats ──────────────────────────────────────────────────────
+    let referralStats = {};
+    try {
+      if (referralSystem) {
+        referralStats = await referralSystem.getAdminStats();
+      }
+    } catch (_) { /* non-fatal */ }
+
     return res.json({
       serverTime: new Date().toISOString(),
       // Flat fields required by the spec
@@ -5225,6 +5304,7 @@ app.get("/api/admin/stats", rateLimit({ windowMs: 60000, max: 60 }), authMiddlew
       },
       tiers,
       purchases: purchasesData,
+      referrals: referralStats,
       health: {
         db: dbHealth,
         redis: redisHealth,
@@ -5262,46 +5342,138 @@ app.get("/api/admin/recent", rateLimit({ windowMs: 60000, max: 60 }), authMiddle
   }
 });
 
-// Get user's referral stats and invite link
-app.get("/api/referral/stats", apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+// ─── Referral Growth System Endpoints ─────────────────────────────────────────
+
+/**
+ * GET /api/referral/me
+ * Returns the user's referral stats and invite link.
+ */
+app.get('/api/referral/me', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
   try {
-    if (!referralSystem) {
-      return res.status(503).json({ error: 'Referral system not available' });
-    }
-
-    const userId = req.user.id;
-    const stats = await referralSystem.getReferralStats(userId);
-    const inviteLink = await referralSystem.getInviteLink(userId);
-
-    return res.json({
-      ...stats,
-      inviteLink
-    });
-  } catch (error) {
-    console.error('[Referral] Error getting stats:', error.message);
+    if (!referralSystem) return res.status(503).json({ error: 'Referral system not available' });
+    const stats = await referralSystem.getStats(req.user.id);
+    return res.json(stats);
+  } catch (err) {
+    console.error('[Referral] /me error:', err.message);
     return res.status(500).json({ error: 'Failed to retrieve referral stats' });
   }
 });
 
-// Track referral usage (called during signup)
-app.post("/api/referral/track", apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+// Keep old /stats alias for backward compatibility
+app.get('/api/referral/stats', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
   try {
-    if (!referralSystem) {
-      return res.status(503).json({ error: 'Referral system not available' });
-    }
+    if (!referralSystem) return res.status(503).json({ error: 'Referral system not available' });
+    const stats = await referralSystem.getStats(req.user.id);
+    return res.json(stats);
+  } catch (err) {
+    console.error('[Referral] /stats error:', err.message);
+    return res.status(500).json({ error: 'Failed to retrieve referral stats' });
+  }
+});
 
+/**
+ * POST /api/referral/click
+ * Body: { referralCode }
+ * Records a link click and returns { clickId }.
+ * No auth required (called on invite landing page before signup).
+ */
+app.post('/api/referral/click', apiLimiter, async (req, res) => {
+  try {
+    if (!referralSystem) return res.status(503).json({ error: 'Referral system not available' });
     const { referralCode } = req.body;
-    const newUserId = req.user.id;
-
-    if (!referralCode) {
+    if (!referralCode || typeof referralCode !== 'string' || referralCode.length > 20) {
       return res.status(400).json({ error: 'referralCode is required' });
     }
+    const ip        = req.ip || req.connection?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    const clickId   = await referralSystem.recordClick(referralCode, ip, userAgent);
+    if (!clickId) return res.status(400).json({ error: 'Invalid referral code or rate limited' });
+    return res.json({ clickId });
+  } catch (err) {
+    console.error('[Referral] /click error:', err.message);
+    return res.status(500).json({ error: 'Failed to record click' });
+  }
+});
 
-    const success = await referralSystem.trackReferral(referralCode, newUserId, false);
+/**
+ * POST /api/referral/register
+ * Body: { referralCode, clickId }
+ * Links the currently-authenticated new user to an inviter (once only).
+ */
+app.post('/api/referral/register', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  try {
+    if (!referralSystem) return res.status(503).json({ error: 'Referral system not available' });
+    const { referralCode, clickId } = req.body;
+    if (!referralCode) return res.status(400).json({ error: 'referralCode is required' });
+    const ip    = req.ip || req.connection?.remoteAddress;
+    const email = req.user.email || null;
+    const result = await referralSystem.registerReferral(
+      referralCode, clickId || null, req.user.id, email, ip
+    );
+    return res.json(result);
+  } catch (err) {
+    console.error('[Referral] /register error:', err.message);
+    return res.status(500).json({ error: 'Failed to register referral' });
+  }
+});
 
-    return res.json({ success });
-  } catch (error) {
-    console.error('[Referral] Error tracking referral:', error.message);
+/**
+ * POST /api/referral/profile-complete
+ * Advances the referral stage to PROFILE_DONE.
+ */
+app.post('/api/referral/profile-complete', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  try {
+    if (!referralSystem) return res.status(503).json({ error: 'Referral system not available' });
+    await referralSystem.markProfileDone(req.user.id);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[Referral] /profile-complete error:', err.message);
+    return res.status(500).json({ error: 'Failed to update referral stage' });
+  }
+});
+
+/**
+ * POST /api/referral/party-first-join
+ * Final step – marks referral COMPLETED and checks milestones.
+ */
+app.post('/api/referral/party-first-join', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  try {
+    if (!referralSystem) return res.status(503).json({ error: 'Referral system not available' });
+    const result = await referralSystem.markPartyJoined(req.user.id);
+    return res.json(result);
+  } catch (err) {
+    console.error('[Referral] /party-first-join error:', err.message);
+    return res.status(500).json({ error: 'Failed to complete referral' });
+  }
+});
+
+/**
+ * GET /api/referral/rewards
+ * Returns the user's earned reward history.
+ */
+app.get('/api/referral/rewards', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  try {
+    if (!referralSystem) return res.status(503).json({ error: 'Referral system not available' });
+    const stats = await referralSystem.getStats(req.user.id);
+    return res.json({ rewards: stats.rewards || [] });
+  } catch (err) {
+    console.error('[Referral] /rewards error:', err.message);
+    return res.status(500).json({ error: 'Failed to retrieve rewards' });
+  }
+});
+
+// Keep old /track alias for backward compatibility
+app.post('/api/referral/track', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  try {
+    if (!referralSystem) return res.status(503).json({ error: 'Referral system not available' });
+    const { referralCode } = req.body;
+    if (!referralCode) return res.status(400).json({ error: 'referralCode is required' });
+    const result = await referralSystem.registerReferral(
+      referralCode, null, req.user.id, req.user.email || null, req.ip
+    );
+    return res.json({ success: result.ok });
+  } catch (err) {
+    console.error('[Referral] /track error:', err.message);
     return res.status(500).json({ error: 'Failed to track referral' });
   }
 });
