@@ -80,6 +80,19 @@ describe('POST /api/auth/signup', () => {
       .send({ email: user.email, password: user.password, djName: user.djName, termsAccepted: true });
 
     expect(res.status).toBe(409);
+    expect(res.headers['content-type']).toMatch(/json/);
+    expect(res.body.error).toMatch(/email/i);
+  });
+
+  test('returns 400 with helpful message for too-short password', async () => {
+    const user = makeUser('short');
+    const res = await request(app)
+      .post('/api/auth/signup')
+      .send({ email: user.email, password: '123', djName: user.djName, termsAccepted: true });
+
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toMatch(/json/);
+    expect(res.body.error).toBeTruthy();
   });
 
   test('returns 400 when required fields are missing', async () => {
