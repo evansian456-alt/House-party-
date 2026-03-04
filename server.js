@@ -75,6 +75,10 @@ const { verifyStripeSignature, processStripeWebhook } = require('./stripe-webhoo
 // Stripe billing client (null when STRIPE_SECRET_KEY is unset)
 const stripeClient = require('./stripe-client');
 
+// Unified billing modules
+const { PRODUCTS, getProductByPlatformId } = require('./billing/products');
+const { applyPurchaseToUser } = require('./billing/entitlements');
+
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "8080", 10);
@@ -2761,6 +2765,11 @@ let nextHostId = 1;
 // code -> { chatMode, createdAt, hostId, hostConnected, guestCount }
 const fallbackPartyStorage = new Map();
 
+// Heartbeat store: userId -> Date (last seen)
+const _heartbeatStore = new Map();
+// Basket store: userId -> Set<productKey>
+const _baskets = new Map();
+
 // Helper function to wrap promises with timeout
 function promiseWithTimeout(promise, timeoutMs, errorMessage) {
   return Promise.race([
@@ -5116,8 +5125,88 @@ app.get("/api/admin/stats", rateLimit({ windowMs: 60000, max: 60 }), authMiddlew
       activeParties = partyCodes.size;
     } catch (_) { /* Redis may be unavailable */ }
 
+    // ── Active users (heartbeat – last 5 minutes) ───────────────────────────
+    const fiveMinAgo = Date.now() - 5 * 60 * 1000;
+    let activeUsersNow = 0;
+    try {
+      for (const ts of _heartbeatStore.values()) {
+        if (ts instanceof Date && ts.getTime() > fiveMinAgo) activeUsersNow++;
+        else if (typeof ts === 'number' && ts > fiveMinAgo) activeUsersNow++;
+      }
+      // Also check Redis heartbeat keys if available
+      if (isRedisReady()) {
+        const hbKeys = [];
+        let cur = '0';
+        do {
+          const [next, keys] = await redis.scan(cur, 'MATCH', 'heartbeat:*', 'COUNT', 100);
+          cur = next;
+          hbKeys.push(...keys);
+        } while (cur !== '0');
+        // Count unique users (may overlap with in-memory store – use a Set)
+        const seen = new Set(Array.from(_heartbeatStore.entries())
+          .filter(([, ts]) => (ts instanceof Date ? ts.getTime() : ts) > fiveMinAgo)
+          .map(([uid]) => uid));
+        for (const k of hbKeys) {
+          const uid = k.replace('heartbeat:', '');
+          if (!seen.has(uid)) {
+            const val = await redis.get(k);
+            if (val && Number(val) > fiveMinAgo) { seen.add(uid); activeUsersNow++; }
+          }
+        }
+      }
+    } catch (_) { /* non-fatal */ }
+
+    // ── Revenue stats ───────────────────────────────────────────────────────
+    let revenueTotal = 0;
+    let revenueToday = 0;
+    let topProducts = [];
+    let recentPurchases = [];
+    try {
+      const revTotalResult = await db.query(
+        `SELECT COALESCE(SUM(amount_cents), 0) AS total FROM purchases`
+      );
+      revenueTotal = parseInt(revTotalResult.rows[0]?.total || 0, 10);
+    } catch (_) { /* table may not have amount_cents */ }
+    try {
+      const revTodayResult = await db.query(
+        `SELECT COALESCE(SUM(amount_cents), 0) AS total FROM purchases WHERE created_at >= CURRENT_DATE`
+      );
+      revenueToday = parseInt(revTodayResult.rows[0]?.total || 0, 10);
+    } catch (_) { /* non-fatal */ }
+    try {
+      const topResult = await db.query(
+        `SELECT COALESCE(sku, item_key, product_key) AS key, COUNT(*) AS cnt
+         FROM purchases GROUP BY 1 ORDER BY cnt DESC LIMIT 10`
+      );
+      topProducts = topResult.rows.map(r => ({ key: r.key, count: parseInt(r.cnt, 10) }));
+    } catch (_) { /* non-fatal */ }
+    try {
+      const recentResult = await db.query(
+        `SELECT id, user_id, COALESCE(sku, item_key, product_key) AS key,
+                provider, created_at
+         FROM purchases ORDER BY created_at DESC LIMIT 20`
+      );
+      recentPurchases = recentResult.rows.map(r => ({
+        id: r.id,
+        userId: r.user_id,
+        key: r.key,
+        provider: r.provider,
+        createdAt: r.created_at
+      }));
+    } catch (_) { /* non-fatal */ }
+
     return res.json({
       serverTime: new Date().toISOString(),
+      // Flat fields required by the spec
+      totalUsers: parseInt(ur.total, 10),
+      activeUsersNow,
+      partyPassUsers: tiers.PARTY_PASS || 0,
+      proUsers: tiers.PRO || 0,
+      revenueTotal,
+      revenueToday,
+      topProducts,
+      recentPurchases,
+      // Existing nested fields (kept for backwards compatibility)
       users: {
         total: parseInt(ur.total, 10),
         profilesCompleted: parseInt(ur.profiles_completed, 10),
@@ -5525,6 +5614,327 @@ app.post("/api/stripe/webhook", rateLimit({ windowMs: 60000, max: 100 }), expres
 if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
   const Sentry = require('@sentry/node');
   app.use(Sentry.Handlers.errorHandler());
+}
+
+// ============================================================================
+// HEARTBEAT – active user tracking
+// ============================================================================
+// _heartbeatStore is defined near the top of this file (alongside other Maps).
+
+/**
+ * POST /api/metrics/heartbeat
+ * Body: { userId }
+ * Stores lastSeen timestamp so /api/admin/stats can count active users.
+ */
+app.post('/api/metrics/heartbeat', apiLimiter, async (req, res) => {
+  const { userId } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  _heartbeatStore.set(String(userId), new Date());
+  // Also try Redis so multi-instance deploys work
+  try {
+    if (isRedisReady()) {
+      await redis.set(`heartbeat:${userId}`, Date.now(), 'EX', 300);
+    }
+  } catch (_) { /* non-fatal */ }
+  return res.json({ ok: true });
+});
+
+// ============================================================================
+// BASKET – server-side shopping basket
+// ============================================================================
+// _baskets is defined near the top of this file (alongside other Maps).
+
+/**
+ * POST /api/basket/add
+ * Body: { productKey }
+ * (userId taken from auth token)
+ */
+app.post('/api/basket/add', apiLimiter, authMiddleware.requireAuth, (req, res) => {
+  const { productKey } = req.body || {};
+  const userId = req.user.userId;
+  if (!productKey) return res.status(400).json({ error: 'productKey required' });
+  if (!PRODUCTS[productKey]) return res.status(400).json({ error: `Unknown productKey: ${productKey}` });
+  const basket = _baskets.get(userId) || new Set();
+  basket.add(productKey);
+  _baskets.set(userId, basket);
+  return res.json({ basket: Array.from(basket) });
+});
+
+/**
+ * POST /api/basket/remove
+ * Body: { productKey }
+ * (userId taken from auth token)
+ */
+app.post('/api/basket/remove', apiLimiter, authMiddleware.requireAuth, (req, res) => {
+  const { productKey } = req.body || {};
+  const userId = req.user.userId;
+  if (!productKey) return res.status(400).json({ error: 'productKey required' });
+  const basket = _baskets.get(userId) || new Set();
+  basket.delete(productKey);
+  _baskets.set(userId, basket);
+  return res.json({ basket: Array.from(basket) });
+});
+
+/**
+ * GET /api/basket
+ * Query: ?userId= (ignored – uses auth token)
+ */
+app.get('/api/basket', apiLimiter, authMiddleware.requireAuth, (req, res) => {
+  const userId = req.user.userId;
+  const basket = _baskets.get(userId) || new Set();
+  return res.json({ basket: Array.from(basket) });
+});
+
+// ============================================================================
+// IAP – Apple In-App Purchase verification
+// ============================================================================
+
+/**
+ * POST /api/iap/apple/verify
+ * Body: { receiptData, userId }
+ * ENV: APPLE_SHARED_SECRET
+ */
+app.post('/api/iap/apple/verify', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  const { receiptData } = req.body || {};
+  const userId = req.user.userId;
+
+  if (!receiptData) return res.status(400).json({ error: 'receiptData required' });
+
+  const sharedSecret = process.env.APPLE_SHARED_SECRET;
+  if (!sharedSecret) {
+    console.error('[IAP/Apple] APPLE_SHARED_SECRET not set');
+    return res.status(503).json({ error: 'Apple IAP not configured' });
+  }
+
+  // Verify with Apple – try production first, then sandbox
+  const https = require('https');
+  async function verifyWithApple(url, payload) {
+    return new Promise((resolve, reject) => {
+      const body = JSON.stringify(payload);
+      const opts = new URL(url);
+      const reqOpts = {
+        hostname: opts.hostname,
+        path: opts.pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+      };
+      const r = https.request(reqOpts, (resp) => {
+        let data = '';
+        resp.on('data', d => { data += d; });
+        resp.on('end', () => {
+          try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+        });
+      });
+      r.on('error', reject);
+      r.write(body);
+      r.end();
+    });
+  }
+
+  try {
+    const payload = { 'receipt-data': receiptData, password: sharedSecret, 'exclude-old-transactions': true };
+    let appleResp = await verifyWithApple('https://buy.itunes.apple.com/verifyReceipt', payload);
+
+    // Status 21007 = sandbox receipt sent to production – retry with sandbox
+    if (appleResp.status === 21007) {
+      appleResp = await verifyWithApple('https://sandbox.itunes.apple.com/verifyReceipt', payload);
+    }
+
+    if (appleResp.status !== 0) {
+      console.warn(`[IAP/Apple] Verification failed with status ${appleResp.status}`);
+      return res.status(400).json({ error: `Apple verification failed: status ${appleResp.status}` });
+    }
+
+    const latestReceipts = appleResp.latest_receipt_info || appleResp.receipt?.in_app || [];
+    const results = [];
+
+    for (const receipt of latestReceipts) {
+      const productId = receipt.product_id;
+      const transactionId = receipt.transaction_id;
+      const product = getProductByPlatformId('apple', productId);
+      if (!product) {
+        console.warn(`[IAP/Apple] Unknown productId: ${productId}`);
+        continue;
+      }
+      try {
+        const result = await applyPurchaseToUser({
+          userId,
+          productKey: product.key,
+          provider: 'apple',
+          providerTransactionId: transactionId,
+          raw: receipt
+        });
+        results.push({ productId, productKey: product.key, ...result });
+      } catch (err) {
+        console.error(`[IAP/Apple] applyPurchaseToUser error for ${productId}:`, err.message);
+      }
+    }
+
+    return res.json({ ok: true, results });
+  } catch (err) {
+    console.error('[IAP/Apple] Verification error:', err.message);
+    return res.status(500).json({ error: 'Apple verification failed' });
+  }
+});
+
+// ============================================================================
+// IAP – Google Play Billing verification
+// ============================================================================
+
+/**
+ * POST /api/iap/google/verify
+ * Body: { packageName, productId, purchaseToken, userId }
+ * ENV: GOOGLE_PLAY_SERVICE_ACCOUNT_JSON, GOOGLE_PLAY_PACKAGE_NAME
+ */
+app.post('/api/iap/google/verify', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  const { packageName: bodyPackageName, productId, purchaseToken } = req.body || {};
+  const userId = req.user.userId;
+
+  const packageName = bodyPackageName || process.env.GOOGLE_PLAY_PACKAGE_NAME;
+  if (!productId || !purchaseToken) {
+    return res.status(400).json({ error: 'productId and purchaseToken required' });
+  }
+  if (!packageName) {
+    return res.status(400).json({ error: 'packageName required (or set GOOGLE_PLAY_PACKAGE_NAME)' });
+  }
+
+  const serviceAccountJson = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
+  if (!serviceAccountJson) {
+    console.error('[IAP/Google] GOOGLE_PLAY_SERVICE_ACCOUNT_JSON not set');
+    return res.status(503).json({ error: 'Google Play IAP not configured' });
+  }
+
+  try {
+    const serviceAccount = JSON.parse(serviceAccountJson);
+
+    // Get access token via JWT + Google OAuth2
+    const jwt = require('jsonwebtoken');
+    const now = Math.floor(Date.now() / 1000);
+    const jwtPayload = {
+      iss: serviceAccount.client_email,
+      scope: 'https://www.googleapis.com/auth/androidpublisher',
+      aud: 'https://oauth2.googleapis.com/token',
+      exp: now + 3600,
+      iat: now
+    };
+    const signedJwt = jwt.sign(jwtPayload, serviceAccount.private_key, { algorithm: 'RS256' });
+
+    const https = require('https');
+    async function postForm(url, formData) {
+      return new Promise((resolve, reject) => {
+        const body = new URLSearchParams(formData).toString();
+        const opts = new URL(url);
+        const reqOpts = {
+          hostname: opts.hostname,
+          path: opts.pathname,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
+        };
+        const r = https.request(reqOpts, (resp) => {
+          let data = '';
+          resp.on('data', d => { data += d; });
+          resp.on('end', () => {
+            try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+          });
+        });
+        r.on('error', reject);
+        r.write(body);
+        r.end();
+      });
+    }
+
+    async function getJson(url, accessToken) {
+      return new Promise((resolve, reject) => {
+        const opts = new URL(url);
+        const reqOpts = {
+          hostname: opts.hostname,
+          path: opts.pathname + opts.search,
+          method: 'GET',
+          headers: { Authorization: `Bearer ${accessToken}` }
+        };
+        const r = https.request(reqOpts, (resp) => {
+          let data = '';
+          resp.on('data', d => { data += d; });
+          resp.on('end', () => {
+            try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+          });
+        });
+        r.on('error', reject);
+        r.end();
+      });
+    }
+
+    const tokenResp = await postForm('https://oauth2.googleapis.com/token', {
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: signedJwt
+    });
+
+    if (!tokenResp.access_token) {
+      console.error('[IAP/Google] Failed to get access token:', tokenResp);
+      return res.status(500).json({ error: 'Failed to authenticate with Google' });
+    }
+
+    // Determine if product is one-time or subscription and use appropriate API
+    const product = getProductByPlatformId('google', productId);
+    const productType = product ? product.type : 'one_time';
+
+    let purchaseData;
+    if (productType === 'subscription') {
+      purchaseData = await getJson(
+        `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/subscriptions/${productId}/tokens/${purchaseToken}`,
+        tokenResp.access_token
+      );
+    } else {
+      purchaseData = await getJson(
+        `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/products/${productId}/tokens/${purchaseToken}`,
+        tokenResp.access_token
+      );
+    }
+
+    if (purchaseData.error) {
+      console.warn('[IAP/Google] Purchase validation error:', purchaseData.error);
+      return res.status(400).json({ error: `Google validation failed: ${purchaseData.error.message || 'unknown'}` });
+    }
+
+    if (!product) {
+      console.warn(`[IAP/Google] Unknown productId: ${productId}`);
+      return res.status(400).json({ error: `Unknown productId: ${productId}` });
+    }
+
+    const transactionId = purchaseToken; // Use token as unique transaction ID
+    const result = await applyPurchaseToUser({
+      userId,
+      productKey: product.key,
+      provider: 'google',
+      providerTransactionId: transactionId,
+      raw: purchaseData
+    });
+
+    return res.json({ ok: true, productKey: product.key, ...result });
+  } catch (err) {
+    console.error('[IAP/Google] Verification error:', err.message);
+    return res.status(500).json({ error: 'Google Play verification failed' });
+  }
+});
+
+// ============================================================================
+// ADMIN helper
+// ============================================================================
+
+/**
+ * isAdmin(email) - matches admin email exactly (case-insensitive).
+ * Checks ADMIN_EMAILS env var (comma-separated) and the hardcoded admin email.
+ * @param {string} email
+ * @returns {boolean}
+ */
+function isAdmin(email) {
+  if (!email) return false;
+  const lc = email.trim().toLowerCase();
+  // Delegate to auth middleware's isAdminEmail (reads ADMIN_EMAILS env var)
+  if (authMiddleware.isAdminEmail(lc)) return true;
+  // Fallback: check hardcoded admin email from ADMIN_EMAIL env var
+  const hardcoded = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  return hardcoded !== '' && lc === hardcoded;
 }
 
 // Optional fallback error handler for non-Sentry errors
@@ -8414,4 +8824,6 @@ module.exports = {
   // Memory-stability testing hooks
   syncTickIntervals,
   partyEventHistory,
+  // Billing / admin helpers
+  isAdmin,
 };
