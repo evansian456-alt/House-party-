@@ -102,7 +102,7 @@ async function timed(collector, endpoint, fn) {
   let result = {};
   try {
     result = await fn();
-    ok = result == null || result.ok !== false;
+    ok = result === null || result === undefined || result.ok !== false;
   } catch (_) {
     ok = false;
   }

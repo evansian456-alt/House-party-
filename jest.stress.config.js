@@ -21,7 +21,12 @@ module.exports = {
   ],
   transform: {},
   transformIgnorePatterns: ['node_modules/(?!(nanoid)/)'],
-  setupFilesAfterEnv: ['<rootDir>/tests/stress/workerSetup.js', '<rootDir>/jest.setup.js'],
+  setupFilesAfterEnv: [
+    // Must run first: read testcontainer URLs from state file into process.env
+    '<rootDir>/tests/stress/workerSetup.js',
+    // Must run second: apply global test mocks (ioredis-mock, skip enforcement, etc.)
+    '<rootDir>/jest.setup.js',
+  ],
   globalSetup: '<rootDir>/tests/stress/globalSetup.js',
   globalTeardown: '<rootDir>/tests/stress/globalTeardown.js',
   testTimeout: 120000,

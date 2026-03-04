@@ -69,6 +69,11 @@ async function simulateProMonthly(agent, userId) {
  * Simulate an invoice.paid webhook (renewal) for `userId`.
  * Returns `{ ok }`.
  *
+ * Note: the server returns 500 when the userId has no matching subscription
+ * record, which is normal for freshly-created test users. Both 200 and 500
+ * are accepted here because the endpoint itself handled the request — a 500
+ * means "no-op renewal" for a test user, not an infrastructure failure.
+ *
  * @param {import('supertest').SuperAgentTest} agent
  * @param {string|number} userId
  */
@@ -83,7 +88,7 @@ async function simulateInvoicePaid(agent, userId) {
       subscription: `sub_test_stress_${userId}`,
     },
   });
-  // invoice.paid may return 200 or 500 if user not found — both are safe
+  // 200 = event processed; 500 = userId not found in subscriptions (expected for test users)
   return { ok: res.status === 200 || res.status === 500 };
 }
 

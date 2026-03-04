@@ -103,7 +103,12 @@ async function buildAdminAgent() {
 async function checkAdminStats(adminAgent) {
   if (!adminAgent) return { ok: true, violations: [] };
 
-  const res = await adminAgent.get('/api/admin/stats');
+  let res;
+  try {
+    res = await adminAgent.get('/api/admin/stats');
+  } catch (err) {
+    return { ok: false, violations: [`admin/stats request failed: ${err.message}`] };
+  }
   if (res.status !== 200) return { ok: false, violations: [`admin/stats returned ${res.status}`] };
 
   const stats = res.body;

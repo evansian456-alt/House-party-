@@ -79,15 +79,17 @@ async function basketRoundTrip(agent, itemCount = 2) {
 
 /**
  * Simulate basket checkout (safe — no real payment initiated).
- * The server will return 400 or 503 when Stripe is not configured; both are
- * treated as acceptable "no-cost" outcomes.
- * Returns `{ ok }`.
+ * The server will return:
+ *   - 503: Stripe not configured (STRIPE_SECRET_KEY absent) — expected in test environments
+ *   - 400: basket is empty (items were removed in the prior round-trip) — expected
+ *   - 200: checkout session URL returned (only if Stripe is configured)
+ *   - 401: authentication failure — should not happen if agent is authenticated
+ * Returns `{ ok }` where ok=true for expected no-cost outcomes (200/400/503).
  *
  * @param {import('supertest').SuperAgentTest} agent
  */
 async function simulateCheckout(agent) {
   const res = await agent.post('/api/basket/checkout').send({});
-  // 200 = redirect URL returned, 400 = empty basket / invalid, 503 = Stripe not configured
   return { ok: res.status === 200 || res.status === 400 || res.status === 503 };
 }
 

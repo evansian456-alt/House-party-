@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * Jest setupFilesAfterEach for stress tests.
+ * Jest setupFilesAfterEnv for stress tests.
  *
- * Reads the container state file written by stressGlobalSetup.js and
+ * Reads the container state file written by globalSetup.js and
  * injects DATABASE_URL / REDIS_URL into the worker's process.env so that
  * server.js (loaded via require) picks up the testcontainer endpoints.
  *
