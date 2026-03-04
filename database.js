@@ -72,6 +72,22 @@ async function initializeSchema() {
     
     await query(schema);
     console.log('[Database] Schema initialized successfully');
+
+    // Apply all migration files in sorted order (idempotent — all use IF NOT EXISTS).
+    // Files must follow the NNN_description.sql naming convention so that sort()
+    // produces the correct application order (e.g. 001_, 002_, …, 006_).
+    const migrationsDir = path.join(__dirname, 'db', 'migrations');
+    if (fs.existsSync(migrationsDir)) {
+      const files = fs.readdirSync(migrationsDir)
+        .filter((f) => f.endsWith('.sql'))
+        .sort();
+      for (const file of files) {
+        const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+        await query(sql);
+        console.log(`[Database] Migration applied: ${file}`);
+      }
+    }
+
     return true;
   } catch (error) {
     console.error('[Database] Schema initialization error:', error.message);

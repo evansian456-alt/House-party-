@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   reset_password_token TEXT,
   reset_password_expires TIMESTAMPTZ,
   profile_completed BOOLEAN NOT NULL DEFAULT FALSE,
+  terms_accepted_at TIMESTAMPTZ,
   is_admin BOOLEAN NOT NULL DEFAULT FALSE
 );
 

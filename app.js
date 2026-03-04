@@ -9883,6 +9883,8 @@ async function handleSignup() {
     errorEl.textContent = 'Welcome to the party 🥳';
     errorEl.classList.remove('hidden');
     errorEl.classList.add('success');
+    // Wait ~1.5s so the user sees the success message before the view transitions
+    await new Promise((r) => setTimeout(r, 1500));
     const sessionOk = await initAuthFlow();
     if (!sessionOk) {
       // Signup API succeeded but session could not be confirmed — show visible error toast
