@@ -111,6 +111,7 @@ document.body.innerHTML = `
     <section class="card hidden" id="viewCompleteProfile"><h1>Complete Profile</h1></section>
     <section class="card hidden" id="viewAuthHome"><h1>Auth Home</h1></section>
     <section class="card hidden" id="viewAdminDashboard"><h1>Admin Dashboard</h1></section>
+    <section class="card hidden" id="viewInviteFriends"><h1>Invite Friends</h1></section>
     <input id="joinCode" /><input id="guestName" />
     <input id="accountDjName" /><input id="accountEmail" /><input id="accountPassword" />
     <div id="selectedTierInfo">

@@ -1,305 +1,478 @@
 /**
- * Referral System
- * 
- * Viral referral tracking and rewards:
- * - Generate unique invite links
- * - Track referral usage
- * - Reward logic: 5 paid referrals = 1 free month
+ * Referral Growth System
+ *
+ * Tracks invite referrals, enforces anti-fraud rules, and grants
+ * temporary Party Pass / Pro rewards when milestones are reached.
+ *
+ * Milestone table:
+ *  3  → 30 min Party Pass   (1800 seconds)
+ *  5  → 1 hr  Party Pass   (3600 seconds)
+ * 10  → 1 Party Pass session
+ * 20  → 3 Party Pass sessions
+ * 50  → 1 month Pro
  */
 
+const crypto = require('crypto');
 const { customAlphabet } = require('nanoid');
-const DEBUG_MODE = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'development';
 
-// Generate readable referral codes (8 chars, alphanumeric)
-const generateReferralCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 8);
+const generateCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 10);
+
+// Milestones ordered ascending; each entry fires once per user.
+const MILESTONES = [
+  { at: 3,  type: 'PARTY_PASS_SECONDS',  seconds: 1800 },
+  { at: 5,  type: 'PARTY_PASS_SECONDS',  seconds: 3600 },
+  { at: 10, type: 'PARTY_PASS_SESSION',  sessions: 1   },
+  { at: 20, type: 'PARTY_PASS_SESSION',  sessions: 3   },
+  { at: 50, type: 'PRO_UNTIL',           proMonths: 1  },
+];
+
+const NEXT_MILESTONES = MILESTONES.map(m => m.at);
+
+function nextMilestone(completed) {
+  return NEXT_MILESTONES.find(m => m > completed) || null;
+}
+
+function hashValue(value) {
+  return crypto.createHash('sha256').update(String(value)).digest('hex').slice(0, 64);
+}
 
 class ReferralSystem {
   constructor(db, redis) {
-    this.db = db;
+    this.db    = db;
     this.redis = redis;
-    
-    // Reward threshold
-    this.PAID_REFERRALS_FOR_REWARD = 5; // 5 paid referrals = 1 free month
-    this.REWARD_DURATION_DAYS = 30; // 1 month free
   }
 
-  /**
-   * Get or create referral code for user
-   */
-  async getReferralCode(userId) {
-    try {
-      // Check if user already has a code
-      if (this.db) {
-        const result = await this.db.query(
-          'SELECT referral_code FROM user_referrals WHERE user_id = $1',
-          [userId]
-        );
-
-        if (result.rows.length > 0) {
-          return result.rows[0].referral_code;
-        }
-      }
-
-      // Generate new code
-      const code = generateReferralCode();
-
-      // Store in database
-      if (this.db) {
-        await this.db.query(
-          `INSERT INTO user_referrals (user_id, referral_code, created_at) 
-           VALUES ($1, $2, NOW()) 
-           ON CONFLICT (user_id) DO NOTHING`,
-          [userId, code]
-        );
-      }
-
-      // Cache in Redis
-      await this.redis.set(`referral:code:${userId}`, code, 'EX', 86400 * 30); // 30 days
-      await this.redis.set(`referral:user:${code}`, userId, 'EX', 86400 * 30);
-
-      if (DEBUG_MODE) {
-        console.log(`[Referral] Generated code for user ${userId}: ${code}`);
-      }
-
-      return code;
-    } catch (error) {
-      console.error('[Referral] Error getting referral code:', error.message);
-      return null;
-    }
-  }
+  // ─── Code management ───────────────────────────────────────────────────────
 
   /**
-   * Track referral usage when new user signs up
+   * Return the user's referral code, creating one if necessary.
    */
-  async trackReferral(referralCode, newUserId, isPaid = false) {
-    try {
-      // Get referring user
-      let referrerUserId = await this.redis.get(`referral:user:${referralCode}`);
-
-      if (!referrerUserId && this.db) {
-        const result = await this.db.query(
-          'SELECT user_id FROM user_referrals WHERE referral_code = $1',
-          [referralCode]
-        );
-        if (result.rows.length > 0) {
-          referrerUserId = result.rows[0].user_id;
-          // Cache for next time
-          await this.redis.set(`referral:user:${referralCode}`, referrerUserId, 'EX', 86400 * 30);
-        }
-      }
-
-      if (!referrerUserId) {
-        console.log(`[Referral] Invalid referral code: ${referralCode}`);
-        return false;
-      }
-
-      // Store referral
-      if (this.db) {
-        await this.db.query(
-          `INSERT INTO referral_tracking 
-           (referrer_user_id, referred_user_id, referral_code, is_paid, created_at) 
-           VALUES ($1, $2, $3, $4, NOW())`,
-          [referrerUserId, newUserId, referralCode, isPaid]
-        );
-      }
-
-      // Increment counters
-      await this.redis.hincrby(`referral:stats:${referrerUserId}`, 'total', 1);
-      if (isPaid) {
-        await this.redis.hincrby(`referral:stats:${referrerUserId}`, 'paid', 1);
-      }
-
-      if (DEBUG_MODE) {
-        console.log(`[Referral] Tracked: ${referrerUserId} referred ${newUserId} (paid: ${isPaid})`);
-      }
-
-      // Check if reward threshold reached
-      await this.checkAndGrantReward(referrerUserId);
-
-      return true;
-    } catch (error) {
-      console.error('[Referral] Error tracking referral:', error.message);
-      return false;
-    }
-  }
-
-  /**
-   * Mark a referral as converted to paid
-   */
-  async markReferralAsPaid(newUserId) {
-    try {
-      if (!this.db) return false;
-
-      // Find the referral record
-      const result = await this.db.query(
-        `UPDATE referral_tracking 
-         SET is_paid = true, converted_at = NOW() 
-         WHERE referred_user_id = $1 AND is_paid = false 
-         RETURNING referrer_user_id`,
-        [newUserId]
+  async getOrCreateCode(userId) {
+    // Fast-path: code already stored on user row
+    if (this.db) {
+      const r = await this.db.query(
+        'SELECT referral_code FROM users WHERE id = $1', [userId]
       );
-
-      if (result.rows.length > 0) {
-        const referrerUserId = result.rows[0].referrer_user_id;
-        
-        // Update Redis counter
-        await this.redis.hincrby(`referral:stats:${referrerUserId}`, 'paid', 1);
-
-        if (DEBUG_MODE) {
-          console.log(`[Referral] Marked as paid: ${newUserId} referred by ${referrerUserId}`);
-        }
-
-        // Check if reward threshold reached
-        await this.checkAndGrantReward(referrerUserId);
-
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      console.error('[Referral] Error marking referral as paid:', error.message);
-      return false;
+      if (r.rows[0]?.referral_code) return r.rows[0].referral_code;
     }
-  }
 
-  /**
-   * Check if user has earned a reward and grant it
-   */
-  async checkAndGrantReward(userId) {
-    try {
-      if (!this.db) return;
-
-      // Count paid referrals
-      const result = await this.db.query(
-        `SELECT COUNT(*) as paid_count, 
-                COUNT(*) FILTER (WHERE reward_granted = true) as rewarded_count 
-         FROM referral_tracking 
-         WHERE referrer_user_id = $1 AND is_paid = true`,
-        [userId]
+    const code = generateCode();
+    if (this.db) {
+      await this.db.query(
+        `UPDATE users SET referral_code = $1 WHERE id = $2 AND referral_code IS NULL`,
+        [code, userId]
       );
-
-      const paidCount = parseInt(result.rows[0].paid_count);
-      const rewardedCount = parseInt(result.rows[0].rewarded_count);
-
-      // Calculate how many rewards should be granted
-      const totalRewardsEarned = Math.floor(paidCount / this.PAID_REFERRALS_FOR_REWARD);
-      const rewardsToGrant = totalRewardsEarned - rewardedCount;
-
-      if (rewardsToGrant > 0) {
-        // Grant Pro subscription for reward duration
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + (this.REWARD_DURATION_DAYS * rewardsToGrant));
-
-        await this.db.query(
-          `INSERT INTO user_entitlements 
-           (user_id, product_id, granted_at, expires_at, source) 
-           VALUES ($1, 'pro_monthly', NOW(), $2, 'referral_reward') 
-           ON CONFLICT (user_id, product_id) 
-           DO UPDATE SET expires_at = GREATEST(user_entitlements.expires_at, $2)`,
-          [userId, expiryDate]
-        );
-
-        // Mark referrals as rewarded
-        await this.db.query(
-          `UPDATE referral_tracking 
-           SET reward_granted = true 
-           WHERE id IN (
-             SELECT id FROM referral_tracking 
-             WHERE referrer_user_id = $1 AND is_paid = true AND reward_granted = false 
-             LIMIT $2
-           )`,
-          [userId, rewardsToGrant * this.PAID_REFERRALS_FOR_REWARD]
-        );
-
-        console.log(`[Referral] Granted ${rewardsToGrant} reward(s) to user ${userId} (${this.REWARD_DURATION_DAYS * rewardsToGrant} days Pro)`);
-      }
-    } catch (error) {
-      console.error('[Referral] Error checking reward:', error.message);
+      // Re-read in case of concurrent update (idempotent)
+      const r2 = await this.db.query(
+        'SELECT referral_code FROM users WHERE id = $1', [userId]
+      );
+      return r2.rows[0]?.referral_code || code;
     }
+    return code;
   }
 
   /**
-   * Get referral stats for a user
+   * Resolve a referral code → userId (DB lookup).
    */
-  async getReferralStats(userId) {
-    try {
-      // Try Redis first for speed
-      const cached = await this.redis.hgetall(`referral:stats:${userId}`);
-      if (cached && cached.total) {
-        const total = parseInt(cached.total) || 0;
-        const paid = parseInt(cached.paid) || 0;
-        const progress = paid % this.PAID_REFERRALS_FOR_REWARD;
-        const rewardsEarned = Math.floor(paid / this.PAID_REFERRALS_FOR_REWARD);
+  async codeToUserId(code) {
+    if (!this.db) return null;
+    const r = await this.db.query(
+      'SELECT id FROM users WHERE referral_code = $1', [code]
+    );
+    return r.rows[0]?.id || null;
+  }
 
-        return {
-          referralCode: await this.getReferralCode(userId),
-          totalReferrals: total,
-          paidReferrals: paid,
-          progressTowardReward: progress,
-          rewardsEarned
-        };
-      }
+  // ─── Click tracking ─────────────────────────────────────────────────────────
 
-      // Fallback to database
-      if (this.db) {
-        const result = await this.db.query(
-          `SELECT 
-             COUNT(*) as total,
-             COUNT(*) FILTER (WHERE is_paid = true) as paid,
-             COUNT(*) FILTER (WHERE reward_granted = true) as rewarded
-           FROM referral_tracking 
-           WHERE referrer_user_id = $1`,
-          [userId]
-        );
+  /**
+   * Record an invite-link click.  Returns the click_id UUID.
+   */
+  async recordClick(referralCode, ip, userAgent) {
+    if (!this.db) return null;
 
-        const total = parseInt(result.rows[0].total) || 0;
-        const paid = parseInt(result.rows[0].paid) || 0;
-        const progress = paid % this.PAID_REFERRALS_FOR_REWARD;
-        const rewardsEarned = Math.floor(paid / this.PAID_REFERRALS_FOR_REWARD);
+    const ipHash       = ip        ? hashValue(ip)        : null;
+    const uaHash       = userAgent ? hashValue(userAgent) : null;
+    const inviterUserId = await this.codeToUserId(referralCode);
+    if (!inviterUserId) return null;
 
-        // Cache in Redis
-        await this.redis.hset(`referral:stats:${userId}`, 'total', total);
-        await this.redis.hset(`referral:stats:${userId}`, 'paid', paid);
-        await this.redis.expire(`referral:stats:${userId}`, 3600); // 1 hour
-
-        return {
-          referralCode: await this.getReferralCode(userId),
-          totalReferrals: total,
-          paidReferrals: paid,
-          progressTowardReward: progress,
-          rewardsEarned
-        };
-      }
-
-      return {
-        referralCode: await this.getReferralCode(userId),
-        totalReferrals: 0,
-        paidReferrals: 0,
-        progressTowardReward: 0,
-        rewardsEarned: 0
-      };
-    } catch (error) {
-      console.error('[Referral] Error getting stats:', error.message);
-      return {
-        referralCode: null,
-        totalReferrals: 0,
-        paidReferrals: 0,
-        progressTowardReward: 0,
-        rewardsEarned: 0
-      };
+    // Rate-limit: max 20 clicks per code per hour
+    if (this.redis) {
+      const key = `refclick:${referralCode}`;
+      const cnt = await this.redis.incr(key);
+      if (cnt === 1) await this.redis.expire(key, 3600);
+      if (cnt > 20) return null;
     }
+
+    const r = await this.db.query(
+      `INSERT INTO referral_clicks (referral_code, ip_hash, user_agent_hash)
+       VALUES ($1, $2, $3) RETURNING click_id`,
+      [referralCode, ipHash, uaHash]
+    );
+    const clickId = r.rows[0]?.click_id;
+
+    // Create a CLICKED referral record (no referred user yet)
+    if (clickId) {
+      await this.db.query(
+        `INSERT INTO referrals (inviter_user_id, click_id, status, ip_hash)
+         VALUES ($1, $2, 'CLICKED', $3)`,
+        [inviterUserId, clickId, ipHash]
+      );
+    }
+    return clickId;
+  }
+
+  // ─── Signup link ────────────────────────────────────────────────────────────
+
+  /**
+   * Called after a new user completes signup.
+   * Links them to the inviter (at most once per account).
+   * Returns false on abuse detection.
+   */
+  async registerReferral(referralCode, clickId, newUserId, newUserEmail, newUserIp) {
+    if (!this.db) return { ok: false, reason: 'db_unavailable' };
+
+    // Idempotency: each user can only be referred once
+    const already = await this.db.query(
+      'SELECT referred_by_user_id FROM users WHERE id = $1', [newUserId]
+    );
+    if (already.rows[0]?.referred_by_user_id) {
+      return { ok: false, reason: 'already_registered' };
+    }
+
+    const inviterUserId = await this.codeToUserId(referralCode);
+    if (!inviterUserId) return { ok: false, reason: 'invalid_code' };
+
+    // Anti-fraud: no self-referral
+    if (String(inviterUserId) === String(newUserId)) {
+      return { ok: false, reason: 'self_referral' };
+    }
+
+    // Anti-fraud: check email match with inviter
+    const inviterRow = await this.db.query(
+      'SELECT email FROM users WHERE id = $1', [inviterUserId]
+    );
+    if (inviterRow.rows[0]?.email === newUserEmail) {
+      return { ok: false, reason: 'same_email' };
+    }
+
+    // Anti-fraud: IP duplicate check (max 3 accounts per IP)
+    const ipHash = newUserIp ? hashValue(newUserIp) : null;
+    if (ipHash) {
+      const ipCount = await this.db.query(
+        `SELECT COUNT(*) FROM referrals
+         WHERE inviter_user_id = $1 AND ip_hash = $2 AND status != 'REJECTED'`,
+        [inviterUserId, ipHash]
+      );
+      if (parseInt(ipCount.rows[0].count, 10) >= 3) {
+        return { ok: false, reason: 'ip_abuse' };
+      }
+    }
+
+    // Anti-fraud: rate-limit per inviter (max 50 signups in 24h)
+    if (this.redis) {
+      const rKey = `refsignup:${inviterUserId}`;
+      const cnt  = await this.redis.incr(rKey);
+      if (cnt === 1) await this.redis.expire(rKey, 86400);
+      if (cnt > 50)  return { ok: false, reason: 'rate_limited' };
+    }
+
+    // Link the referred_by on the new user
+    await this.db.query(
+      `UPDATE users SET referred_by_user_id = $1 WHERE id = $2`,
+      [inviterUserId, newUserId]
+    );
+
+    // Update the referral row (CLICKED → SIGNED_UP)
+    if (clickId) {
+      await this.db.query(
+        `UPDATE referrals
+         SET referred_user_id = $1, status = 'SIGNED_UP'
+         WHERE click_id = $2 AND inviter_user_id = $3`,
+        [newUserId, clickId, inviterUserId]
+      );
+    } else {
+      await this.db.query(
+        `INSERT INTO referrals (inviter_user_id, referred_user_id, status, ip_hash)
+         VALUES ($1, $2, 'SIGNED_UP', $3)`,
+        [inviterUserId, newUserId, ipHash]
+      );
+    }
+
+    return { ok: true, inviterUserId };
+  }
+
+  // ─── Stage progression ──────────────────────────────────────────────────────
+
+  async markProfileDone(newUserId) {
+    if (!this.db) return;
+    await this.db.query(
+      `UPDATE referrals SET status = 'PROFILE_DONE'
+       WHERE referred_user_id = $1 AND status = 'SIGNED_UP'`,
+      [newUserId]
+    );
   }
 
   /**
-   * Generate invite link for a user
+   * Called when the referred user joins/creates their first party.
+   * This is the final step that triggers the reward check.
+   * Returns { rewarded, reward } if a new milestone was hit.
    */
-  async getInviteLink(userId) {
-    const code = await this.getReferralCode(userId);
-    if (!code) return null;
+  async markPartyJoined(newUserId) {
+    if (!this.db) return { rewarded: false };
 
+    // Anti-fraud: minimum time check – link must have been opened >= 60 seconds ago
+    const referralRow = await this.db.query(
+      `SELECT id, inviter_user_id, created_at
+       FROM referrals
+       WHERE referred_user_id = $1 AND status IN ('SIGNED_UP','PROFILE_DONE')
+       ORDER BY created_at DESC LIMIT 1`,
+      [newUserId]
+    );
+    if (!referralRow.rows.length) return { rewarded: false };
+
+    const row = referralRow.rows[0];
+    const ageSec = (Date.now() - new Date(row.created_at).getTime()) / 1000;
+    if (ageSec < 60) {
+      await this.db.query(
+        `UPDATE referrals SET status = 'REJECTED', rejection_reason = 'too_fast'
+         WHERE id = $1`, [row.id]
+      );
+      return { rewarded: false, reason: 'too_fast' };
+    }
+
+    // Mark completed
+    await this.db.query(
+      `UPDATE referrals SET status = 'COMPLETED', completed_at = NOW()
+       WHERE id = $1`, [row.id]
+    );
+
+    // Increment inviter's referrals_completed atomically
+    const updResult = await this.db.query(
+      `UPDATE users SET referrals_completed = referrals_completed + 1
+       WHERE id = $1 RETURNING referrals_completed`,
+      [row.inviter_user_id]
+    );
+    const total = parseInt(updResult.rows[0]?.referrals_completed || 0, 10);
+
+    // Check milestones and grant any newly reached ones
+    const reward = await this._grantMilestoneRewards(row.inviter_user_id, total);
+    return { rewarded: !!reward, reward, total };
+  }
+
+  // ─── Milestone rewards ──────────────────────────────────────────────────────
+
+  async _grantMilestoneRewards(inviterUserId, totalCompleted) {
+    let lastReward = null;
+    for (const m of MILESTONES) {
+      if (totalCompleted < m.at) continue;
+
+      // Skip if already granted
+      const existing = await this.db.query(
+        `SELECT id FROM referral_rewards
+         WHERE inviter_user_id = $1 AND milestone = $2`,
+        [inviterUserId, m.at]
+      );
+      if (existing.rows.length) continue;
+
+      // Grant the reward
+      let insertQuery;
+      if (m.type === 'PARTY_PASS_SECONDS') {
+        insertQuery = this.db.query(
+          `INSERT INTO referral_rewards
+             (inviter_user_id, milestone, reward_type, amount_seconds)
+           VALUES ($1,$2,$3,$4)`,
+          [inviterUserId, m.at, m.type, m.seconds]
+        );
+        await this.db.query(
+          `UPDATE users
+           SET referral_reward_balance_seconds = referral_reward_balance_seconds + $1
+           WHERE id = $2`,
+          [m.seconds, inviterUserId]
+        );
+      } else if (m.type === 'PARTY_PASS_SESSION') {
+        insertQuery = this.db.query(
+          `INSERT INTO referral_rewards
+             (inviter_user_id, milestone, reward_type, amount_sessions)
+           VALUES ($1,$2,$3,$4)`,
+          [inviterUserId, m.at, m.type, m.sessions]
+        );
+        await this.db.query(
+          `UPDATE users
+           SET referral_reward_balance_sessions = referral_reward_balance_sessions + $1
+           WHERE id = $2`,
+          [m.sessions, inviterUserId]
+        );
+      } else if (m.type === 'PRO_UNTIL') {
+        const proUntil = new Date();
+        proUntil.setMonth(proUntil.getMonth() + m.proMonths);
+        insertQuery = this.db.query(
+          `INSERT INTO referral_rewards
+             (inviter_user_id, milestone, reward_type, pro_until)
+           VALUES ($1,$2,$3,$4)`,
+          [inviterUserId, m.at, m.type, proUntil]
+        );
+        await this.db.query(
+          `UPDATE users
+           SET referral_reward_balance_pro_until =
+             CASE
+               WHEN referral_reward_balance_pro_until IS NULL OR
+                    referral_reward_balance_pro_until < $1
+               THEN $1
+               ELSE referral_reward_balance_pro_until + interval '1 month'
+             END
+           WHERE id = $2`,
+          [proUntil, inviterUserId]
+        );
+      }
+      await insertQuery;
+      lastReward = { milestone: m.at, type: m.type, ...m };
+    }
+    return lastReward;
+  }
+
+  // ─── Stats ──────────────────────────────────────────────────────────────────
+
+  async getStats(userId) {
+    const code = await this.getOrCreateCode(userId);
     const baseUrl = process.env.BASE_URL || 'https://phone-party.up.railway.app';
-    return `${baseUrl}?ref=${code}`;
+    const inviteUrl = `${baseUrl}/invite/${code}`;
+
+    if (!this.db) {
+      return {
+        referralCode: code, inviteUrl,
+        referralsCompleted: 0,
+        nextMilestone: MILESTONES[0].at,
+        progressCurrent: 0, progressTarget: MILESTONES[0].at,
+        progressPercent: 0,
+        rewardBalanceSeconds: 0, rewardBalanceSessions: 0,
+        proUntil: null, rewards: []
+      };
+    }
+
+    const userRow = await this.db.query(
+      `SELECT referrals_completed,
+              referral_reward_balance_seconds,
+              referral_reward_balance_sessions,
+              referral_reward_balance_pro_until
+       FROM users WHERE id = $1`,
+      [userId]
+    );
+    const u = userRow.rows[0] || {};
+    const completed = parseInt(u.referrals_completed || 0, 10);
+    const nm = nextMilestone(completed);
+    const prev = nm ? (MILESTONES.find(m => m.at === nm)
+      ? (MILESTONES[MILESTONES.findIndex(m => m.at === nm) - 1]?.at || 0)
+      : 0) : MILESTONES[MILESTONES.length - 1].at;
+    const progressTarget = nm || MILESTONES[MILESTONES.length - 1].at;
+    const progressCurrent = completed - prev;
+    const progressRange  = progressTarget - prev;
+    const progressPercent = progressRange > 0
+      ? Math.min(100, Math.round((progressCurrent / progressRange) * 100))
+      : 100;
+
+    const rewardsResult = await this.db.query(
+      `SELECT milestone, reward_type, amount_seconds, amount_sessions, pro_until, created_at
+       FROM referral_rewards WHERE inviter_user_id = $1 ORDER BY created_at`,
+      [userId]
+    );
+
+    return {
+      referralCode: code, inviteUrl,
+      referralsCompleted: completed,
+      nextMilestone: nm,
+      progressCurrent: completed,
+      progressTarget,
+      progressPercent,
+      rewardBalanceSeconds:  parseInt(u.referral_reward_balance_seconds  || 0, 10),
+      rewardBalanceSessions: parseInt(u.referral_reward_balance_sessions || 0, 10),
+      proUntil: u.referral_reward_balance_pro_until || null,
+      rewards:  rewardsResult.rows
+    };
+  }
+
+  // ─── Admin stats ────────────────────────────────────────────────────────────
+
+  async getAdminStats() {
+    if (!this.db) return {};
+    try {
+      const [total, today, topReferrers, rewardsToday, rewardsTotal, conversion] =
+        await Promise.all([
+          this.db.query(`SELECT COUNT(*) FROM referrals WHERE status = 'COMPLETED'`),
+          this.db.query(
+            `SELECT COUNT(*) FROM referrals
+             WHERE status = 'COMPLETED' AND completed_at >= CURRENT_DATE`
+          ),
+          this.db.query(
+            `SELECT inviter_user_id, COUNT(*) AS cnt
+             FROM referrals WHERE status = 'COMPLETED'
+             GROUP BY inviter_user_id ORDER BY cnt DESC LIMIT 10`
+          ),
+          this.db.query(
+            `SELECT COUNT(*) FROM referral_rewards WHERE created_at >= CURRENT_DATE`
+          ),
+          this.db.query(`SELECT COUNT(*) FROM referral_rewards`),
+          this.db.query(
+            `SELECT
+               COUNT(*) FILTER (WHERE status != 'CLICKED') * 100.0
+                 / NULLIF(COUNT(*),0)                         AS click_to_signup,
+               COUNT(*) FILTER (WHERE status IN ('PROFILE_DONE','COMPLETED')) * 100.0
+                 / NULLIF(COUNT(*) FILTER (WHERE status != 'CLICKED'),0) AS signup_to_profile,
+               COUNT(*) FILTER (WHERE status = 'COMPLETED') * 100.0
+                 / NULLIF(COUNT(*) FILTER (WHERE status IN ('PROFILE_DONE','COMPLETED')),0)
+                                                              AS profile_to_complete
+             FROM referrals`
+          ),
+        ]);
+      return {
+        totalReferrals:        parseInt(total.rows[0].count, 10),
+        referralsToday:        parseInt(today.rows[0].count, 10),
+        topReferrers:          topReferrers.rows,
+        rewardsGrantedToday:   parseInt(rewardsToday.rows[0].count, 10),
+        rewardsGrantedTotal:   parseInt(rewardsTotal.rows[0].count, 10),
+        referralConversionRates: {
+          clickToSignup:     parseFloat(conversion.rows[0].click_to_signup   || 0).toFixed(1),
+          signupToProfile:   parseFloat(conversion.rows[0].signup_to_profile || 0).toFixed(1),
+          profileToComplete: parseFloat(conversion.rows[0].profile_to_complete || 0).toFixed(1),
+        }
+      };
+    } catch (err) {
+      console.error('[Referral] getAdminStats error:', err.message);
+      return {};
+    }
+  }
+
+  // ─── Reward consumption (called on party start) ─────────────────────────────
+
+  /**
+   * Consume referral reward seconds/sessions for a user starting a party.
+   * Returns the tier they're entitled to (or null if none).
+   */
+  async consumeRewardForPartyStart(userId) {
+    if (!this.db) return null;
+    const r = await this.db.query(
+      `SELECT referral_reward_balance_seconds,
+              referral_reward_balance_sessions,
+              referral_reward_balance_pro_until
+       FROM users WHERE id = $1 FOR UPDATE`, [userId]
+    );
+    const u = r.rows[0];
+    if (!u) return null;
+
+    const proUntil   = u.referral_reward_balance_pro_until;
+    const seconds    = parseInt(u.referral_reward_balance_seconds  || 0, 10);
+    const sessions   = parseInt(u.referral_reward_balance_sessions || 0, 10);
+
+    if (proUntil && new Date(proUntil) > new Date()) return 'pro';
+    if (seconds > 0) return 'party_pass_timed';
+    if (sessions > 0) {
+      await this.db.query(
+        `UPDATE users SET referral_reward_balance_sessions = referral_reward_balance_sessions - 1
+         WHERE id = $1`, [userId]
+      );
+      return 'party_pass_session';
+    }
+    return null;
   }
 }
 
-module.exports = { ReferralSystem };
+module.exports = { ReferralSystem, MILESTONES, nextMilestone };

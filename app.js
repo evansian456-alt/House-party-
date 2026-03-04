@@ -38,7 +38,7 @@ const SYNC_QUALITY_POOR = "Poor";
 const ALL_VIEWS = ['viewLanding', 'viewChooseTier', 'viewAccountCreation', 'viewHome', 'viewAuthHome', 'viewParty', 'viewPayment', 'viewGuest', 
                    'viewLogin', 'viewSignup', 'viewPasswordReset', 'viewProfile', 'viewUpgradeHub', 'viewVisualPackStore',
                    'viewProfileUpgrades', 'viewPartyExtensions', 'viewDjTitleStore', 'viewLeaderboard', 'viewMyProfile',
-                   'viewCompleteProfile', 'viewAdminDashboard'];
+                   'viewCompleteProfile', 'viewAdminDashboard', 'viewInviteFriends'];
 
 // ============================================================
 // PROFILE SCHEMA (versioned localStorage helpers)
@@ -107,6 +107,7 @@ const VIEWS = {
   completeProfile: { id: 'viewCompleteProfile',  requiresAuth: true,  hash: 'complete-profile', onEnter: () => initCompleteProfileView() },
   authHome:        { id: 'viewAuthHome',          requiresAuth: true,  hash: 'home',             onEnter: () => initPartyHomeView() },
   adminDashboard:  { id: 'viewAdminDashboard',    requiresAuth: true,  hash: 'admin',            onEnter: () => initAdminDashboard() },
+  inviteFriends:   { id: 'viewInviteFriends',     requiresAuth: true,  hash: 'invite',           onEnter: () => { if (window._referralUI) { window._referralUI._buildInvitePage(); window._referralUI.startPolling(); } } },
 };
 /* eslint-enable no-use-before-define */
 
@@ -2425,6 +2426,25 @@ function showParty() {
   hide("viewChooseTier");
   hide("viewPayment");
   show("viewParty");
+
+  // Track first-party-join for referral system (fires only once per session)
+  try {
+    if (!sessionStorage.getItem('referral_party_tracked')) {
+      sessionStorage.setItem('referral_party_tracked', '1');
+      fetch('/api/referral/party-first-join', {
+        method: 'POST',
+        credentials: 'include'
+      }).then(r => r.json()).then(data => {
+        if (data.rewarded && data.reward && window._referralUI) {
+          window._referralUI._checkAndCelebrate(
+            (data.total || 1) - 1, data.total || 1
+          );
+        }
+        // Clean up stored referral keys after completion
+        try { localStorage.removeItem('referral_code'); localStorage.removeItem('referral_click_id'); } catch (_) {}
+      }).catch(() => {});
+    }
+  } catch (_) { /* non-fatal */ }
   // Update URL to /party/:code so back button and refresh work
   if (state.code && typeof history !== 'undefined') {
     var partyPath = '/party/' + state.code;
@@ -6881,6 +6901,8 @@ async function initAuthFlow() {
     } else {
       window.AppStateMachine && window.AppStateMachine.transitionTo(window.AppStateMachine.STATES.PARTY_HUB);
       setView('authHome', { fromHash: true });
+      // Start referral polling now that user is authenticated
+      if (window._referralUI) window._referralUI.startPolling();
     }
   } catch (err) {
     console.warn('[Auth] Could not check auth status:', err.message);
@@ -7150,6 +7172,25 @@ async function handleBillingReturn() {
 
   // Handle billing return parameters (billing=success or billing=cancel in URL)
   await handleBillingReturn();
+
+  // Capture referral code from ?ref= URL param and store in localStorage
+  try {
+    const _refParams = new URLSearchParams(window.location.search);
+    const _refCode = _refParams.get('ref');
+    if (_refCode && _refCode.length <= 20) {
+      const _cleanCode = _refCode.toUpperCase();
+      localStorage.setItem('referral_code', _cleanCode);
+      localStorage.setItem('referral_ts', Date.now().toString());
+      // Record the click event (async, non-blocking)
+      fetch('/api/referral/click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ referralCode: _cleanCode })
+      }).then(r => r.json()).then(data => {
+        if (data.clickId) localStorage.setItem('referral_click_id', data.clickId);
+      }).catch(() => {});
+    }
+  } catch (_) { /* localStorage may be unavailable */ }
   
   // Initialize music player
   initializeMusicPlayer();
@@ -9768,6 +9809,22 @@ async function handleSignup() {
   
   if (result.success) {
     showToast('✅ Welcome to Phone Party! Account created successfully!');
+
+    // Attempt to register referral if the user arrived via an invite link
+    try {
+      const refCode = localStorage.getItem('referral_code');
+      const clickId = localStorage.getItem('referral_click_id');
+      if (refCode) {
+        fetch('/api/referral/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ referralCode: refCode, clickId: clickId || null })
+        }).catch(() => {});
+        // Don't clear yet — keep until profile-complete step fires
+      }
+    } catch (_) { /* ignore localStorage errors */ }
+
     await initAuthFlow();
   } else {
     errorEl.textContent = result.error;
@@ -11397,6 +11454,7 @@ function initProductionUpgradeModules() {
     // Initialize referral UI
     if (typeof ReferralUI !== 'undefined') {
       window.referralUI = new ReferralUI();
+      window._referralUI = window.referralUI;
       console.log('[Init] ✅ ReferralUI initialized');
     } else {
       console.warn('[Init] ReferralUI class not available');
