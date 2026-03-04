@@ -1058,7 +1058,7 @@ app.get('/invite/:code', async (req, res) => {
 <script>
   // Store referral info so the app can pick it up after install / first launch
   try {
-    localStorage.setItem('referral_code', '${code}');
+    localStorage.setItem('referral_code', ${JSON.stringify(code)});
     localStorage.setItem('referral_ts',   Date.now().toString());
   } catch(_) {}
 </script>

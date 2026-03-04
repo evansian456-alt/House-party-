@@ -303,8 +303,8 @@ class ReferralSystem {
           [m.sessions, inviterUserId]
         );
       } else if (m.type === 'PRO_UNTIL') {
-        const proUntil = new Date();
-        proUntil.setMonth(proUntil.getMonth() + m.proMonths);
+        // Use days-based calculation to avoid setMonth() edge cases near month boundaries
+        const proUntil = new Date(Date.now() + m.proMonths * 30 * 24 * 60 * 60 * 1000);
         insertQuery = this.db.query(
           `INSERT INTO referral_rewards
              (inviter_user_id, milestone, reward_type, pro_until)
