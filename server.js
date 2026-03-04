@@ -1412,14 +1412,14 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
       email: user.email
     });
 
-    // Set HTTP-only cookie
+    // Set HTTP-only cookie — use HTTPS detection so it works behind proxies too
+    const isHttpsSignup = req.secure || req.headers['x-forwarded-proto'] === 'https';
     res.cookie('auth_token', token, {
       httpOnly: true,
       path: '/',
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttpsSignup,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      sameSite: 'lax',
-      path: '/'
+      sameSite: 'lax'
     });
 
     res.status(201).json({
@@ -1493,14 +1493,14 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
       isAdmin: user.is_admin || false
     });
 
-    // Set HTTP-only cookie
+    // Set HTTP-only cookie — use HTTPS detection so it works behind proxies too
+    const isHttpsLogin = req.secure || req.headers['x-forwarded-proto'] === 'https';
     res.cookie('auth_token', token, {
       httpOnly: true,
       path: '/',
-      secure: process.env.NODE_ENV === 'production',
+      secure: isHttpsLogin,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      sameSite: 'lax',
-      path: '/'
+      sameSite: 'lax'
     });
 
     res.json({
@@ -1523,7 +1523,8 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
  * Log out current user
  */
 app.post("/api/auth/logout", apiLimiter, (req, res) => {
-  res.clearCookie('auth_token', { path: '/' });
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  res.clearCookie('auth_token', { path: '/', secure: isHttps, sameSite: 'lax', httpOnly: true });
   res.json({ success: true });
 });
 
@@ -6077,6 +6078,19 @@ if (process.env.NODE_ENV === 'production' && process.env.SENTRY_DSN) {
   const Sentry = require('@sentry/node');
   app.use(Sentry.Handlers.errorHandler());
 }
+
+// Global JSON error handler — ensures all unhandled Express errors return JSON, never HTML
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+  const message = (process.env.NODE_ENV === 'production' && status === 500)
+    ? 'Internal server error'
+    : (err.message || 'Internal server error');
+  console.error('[Server] Unhandled error:', err);
+  if (!res.headersSent) {
+    res.status(status).json({ error: message });
+  }
+});
 
 // ============================================================================
 // HEARTBEAT – active user tracking

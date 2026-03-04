@@ -35,6 +35,9 @@ describe('Authentication Middleware', () => {
   describe('JWT_SECRET guard semantics', () => {
     const originalEnv = process.env.JWT_SECRET;
     const originalNodeEnv = process.env.NODE_ENV;
+    const originalTestMode = process.env.TEST_MODE;
+    const originalRedisUrl = process.env.REDIS_URL;
+    const originalRailwayEnv = process.env.RAILWAY_ENVIRONMENT;
 
     beforeEach(() => {
       jest.resetModules();
@@ -45,17 +48,28 @@ describe('Authentication Middleware', () => {
       if (originalEnv === undefined) delete process.env.JWT_SECRET;
       else process.env.JWT_SECRET = originalEnv;
       process.env.NODE_ENV = originalNodeEnv;
+      if (originalTestMode === undefined) delete process.env.TEST_MODE;
+      else process.env.TEST_MODE = originalTestMode;
+      if (originalRedisUrl === undefined) delete process.env.REDIS_URL;
+      else process.env.REDIS_URL = originalRedisUrl;
+      if (originalRailwayEnv === undefined) delete process.env.RAILWAY_ENVIRONMENT;
+      else process.env.RAILWAY_ENVIRONMENT = originalRailwayEnv;
     });
 
     it('should throw in production when JWT_SECRET is missing', () => {
       process.env.NODE_ENV = 'production';
       delete process.env.JWT_SECRET;
+      delete process.env.TEST_MODE;
+      delete process.env.REDIS_URL;
+      delete process.env.RAILWAY_ENVIRONMENT;
       expect(() => require('./auth-middleware')).toThrow(/JWT_SECRET environment variable is required in production/);
     });
 
     it('should NOT throw in development when JWT_SECRET is missing', () => {
       process.env.NODE_ENV = 'development';
       delete process.env.JWT_SECRET;
+      delete process.env.REDIS_URL;
+      delete process.env.RAILWAY_ENVIRONMENT;
       expect(() => require('./auth-middleware')).not.toThrow();
     });
 
@@ -68,7 +82,26 @@ describe('Authentication Middleware', () => {
     it('should NOT throw in production when JWT_SECRET is provided', () => {
       process.env.NODE_ENV = 'production';
       process.env.JWT_SECRET = 'a-valid-secret-that-is-long-enough-for-jwt-signing-purposes';
+      delete process.env.TEST_MODE;
       expect(() => require('./auth-middleware')).not.toThrow();
+    });
+
+    it('should throw when REDIS_URL set (production-like) and JWT_SECRET missing', () => {
+      process.env.NODE_ENV = 'development';
+      process.env.REDIS_URL = 'redis://prod.example.com:6379';
+      delete process.env.JWT_SECRET;
+      delete process.env.TEST_MODE;
+      delete process.env.RAILWAY_ENVIRONMENT;
+      expect(() => require('./auth-middleware')).toThrow(/JWT_SECRET environment variable is required in production/);
+    });
+
+    it('should throw when RAILWAY_ENVIRONMENT set (production-like) and JWT_SECRET missing', () => {
+      process.env.NODE_ENV = 'development';
+      process.env.RAILWAY_ENVIRONMENT = 'production';
+      delete process.env.JWT_SECRET;
+      delete process.env.TEST_MODE;
+      delete process.env.REDIS_URL;
+      expect(() => require('./auth-middleware')).toThrow(/JWT_SECRET environment variable is required in production/);
     });
   });
 

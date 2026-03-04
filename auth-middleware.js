@@ -27,10 +27,12 @@ function isAdminEmail(email) {
   return ADMIN_EMAILS.includes(email.trim().toLowerCase());
 }
 
-// JWT_SECRET is REQUIRED in production. In development/test a per-process random fallback
-// is used so the server starts without crashing. JWT integrity remains secure, but tokens
-// will be invalidated on restart and will not be shared across multiple instances.
-const _isProduction = process.env.NODE_ENV === 'production';
+// JWT_SECRET is REQUIRED in production-like environments. Use the same production
+// detection logic as env-validator.js to cover NODE_ENV=production, RAILWAY_ENVIRONMENT,
+// and REDIS_URL deployments. In development/test a per-process random fallback is used.
+const { isProduction: isProductionEnv, isTest: isTestEnv } = require('./env-validator');
+// Test mode always overrides production detection so unit tests can run with REDIS_URL set.
+const _isProduction = isProductionEnv() && !isTestEnv();
 if (_isProduction && !process.env.JWT_SECRET) {
   throw new Error('[Auth] JWT_SECRET environment variable is required in production. Set it via Cloud Run env vars or GCP Secret Manager.');
 }
