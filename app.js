@@ -9881,7 +9881,22 @@ async function handleSignup() {
       setView('login');
     }
   } else {
-    errorEl.textContent = result.error;
+    if (result.status === 409) {
+      // Duplicate email — show message and a "Log in instead" link
+      errorEl.textContent = `${result.error}. `;
+      const loginLink = document.createElement('a');
+      loginLink.href = '#';
+      loginLink.id = 'signupLoginInstead';
+      loginLink.style.cssText = 'color:inherit;text-decoration:underline';
+      loginLink.textContent = 'Log in instead';
+      loginLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        setView('login');
+      });
+      errorEl.appendChild(loginLink);
+    } else {
+      errorEl.textContent = result.error;
+    }
     errorEl.classList.remove('hidden');
   }
 }

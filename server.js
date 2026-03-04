@@ -1438,8 +1438,13 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[Auth] Signup error:', error);
-    res.status(500).json({ error: 'Failed to create account' });
+    console.error('[Auth] Signup error:', error.code || error.message);
+    // 23505 = Postgres unique-constraint violation (race condition: two concurrent signups)
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Email already exists' });
+    }
+    const requestId = require('crypto').randomUUID();
+    res.status(500).json({ error: 'Failed to create account', requestId });
   }
 });
 

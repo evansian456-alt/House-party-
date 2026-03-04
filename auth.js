@@ -84,7 +84,7 @@ async function signUp(email, password, djName = '', termsAccepted = false) {
     }
 
     if (!response.ok) {
-      return { success: false, error: data.error || 'Signup failed' };
+      return { success: false, error: data.error || 'Signup failed', status: response.status };
     }
 
     // Fetch full user data
