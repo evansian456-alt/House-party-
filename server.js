@@ -1314,10 +1314,10 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
     // Hash password
     const passwordHash = await authMiddleware.hashPassword(password);
 
-    // Create user
+    // Create user — set profile_completed immediately since djName is collected at signup
     const result = await db.query(
-      `INSERT INTO users (email, password_hash, dj_name)
-       VALUES ($1, $2, $3)
+      `INSERT INTO users (email, password_hash, dj_name, profile_completed)
+       VALUES ($1, $2, $3, TRUE)
        RETURNING id, email, dj_name, created_at`,
       [email.toLowerCase(), passwordHash, djName.trim()]
     );
@@ -5738,6 +5738,42 @@ app.post("/api/stripe/webhook", rateLimit({ windowMs: 60000, max: 100 }), expres
     console.error('[Stripe] Webhook handler error:', err.message);
   }
 });
+
+/**
+ * POST /api/test/stripe/simulate-webhook
+ * Test-only endpoint to simulate Stripe webhook events without needing a real
+ * Stripe signature. Only available when NODE_ENV === 'test'.
+ *
+ * Supported events:
+ *   checkout.session.completed
+ *   invoice.paid
+ *   invoice.payment_failed
+ *   customer.subscription.deleted
+ */
+if (process.env.NODE_ENV === 'test') {
+  app.post('/api/test/stripe/simulate-webhook', express.json(), async (req, res) => {
+    const { type, data } = req.body || {};
+    if (!type || !data) {
+      return res.status(400).json({ error: 'type and data are required' });
+    }
+    const allowed = [
+      'checkout.session.completed',
+      'invoice.paid',
+      'invoice.payment_failed',
+      'customer.subscription.deleted'
+    ];
+    if (!allowed.includes(type)) {
+      return res.status(400).json({ error: `Unsupported event type: ${type}` });
+    }
+    try {
+      await handleStripeWebhookEvent({ type, data: { object: data } });
+      res.json({ received: true, type });
+    } catch (err) {
+      console.error('[Stripe/Test] simulate-webhook error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+}
 
 /**
  * Handle a verified Stripe webhook event.

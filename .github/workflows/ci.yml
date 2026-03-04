@@ -68,3 +68,25 @@ jobs:
 
       - name: Run unit tests
         run: npm test -- --passWithNoTests --testPathIgnorePatterns='e2e-tests' --forceExit
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e tests (tests/e2e)
+        run: npm run test:e2e:new
+        env:
+          BASE_URL: http://localhost:8080
+          ADMIN_EMAILS: ianevans2023@outlook.com
+        continue-on-error: false
+
+      - name: Upload e2e test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-tests
+          path: playwright-report-tests/
+          retention-days: 7
+
+      - name: Run load tests (k6 — skipped if k6 not installed)
+        run: npm run test:load
+        continue-on-error: true
