@@ -38,7 +38,7 @@ const SYNC_QUALITY_POOR = "Poor";
 const ALL_VIEWS = ['viewLanding', 'viewChooseTier', 'viewAccountCreation', 'viewHome', 'viewAuthHome', 'viewParty', 'viewPayment', 'viewGuest', 
                    'viewLogin', 'viewSignup', 'viewPasswordReset', 'viewProfile', 'viewUpgradeHub', 'viewVisualPackStore',
                    'viewProfileUpgrades', 'viewPartyExtensions', 'viewDjTitleStore', 'viewLeaderboard', 'viewMyProfile',
-                   'viewCompleteProfile', 'viewAdminDashboard', 'viewInviteFriends'];
+                   'viewCompleteProfile', 'viewAdminDashboard', 'viewInviteFriends', 'viewTerms', 'viewPrivacy'];
 
 // ============================================================
 // PROFILE SCHEMA (versioned localStorage helpers)
@@ -108,6 +108,8 @@ const VIEWS = {
   authHome:        { id: 'viewAuthHome',          requiresAuth: true,  hash: 'home',             onEnter: () => initPartyHomeView() },
   adminDashboard:  { id: 'viewAdminDashboard',    requiresAuth: true,  hash: 'admin',            onEnter: () => initAdminDashboard() },
   inviteFriends:   { id: 'viewInviteFriends',     requiresAuth: true,  hash: 'invite',           onEnter: () => { if (window._referralUI) { window._referralUI._buildInvitePage(); window._referralUI.startPolling(); } } },
+  terms:           { id: 'viewTerms',              requiresAuth: false, hash: 'terms' },
+  privacy:         { id: 'viewPrivacy',            requiresAuth: false, hash: 'privacy' },
 };
 /* eslint-enable no-use-before-define */
 
@@ -9763,6 +9765,33 @@ function setupAuthEventListeners() {
     e.preventDefault();
     setView('login');
   });
+
+  // Legal page links (signup form + footer)
+  document.querySelectorAll('.link-to-terms').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      setView('terms');
+    });
+  });
+
+  document.querySelectorAll('.link-to-privacy').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      setView('privacy');
+    });
+  });
+
+  document.querySelectorAll('.link-to-landing-from-legal').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      // Go back to previous view or landing
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        setView('landing');
+      }
+    });
+  });
 }
 
 /**
@@ -9796,6 +9825,8 @@ async function handleSignup() {
   const email = document.getElementById('signupEmail').value;
   const password = document.getElementById('signupPassword').value;
   const djName = document.getElementById('signupDjName').value.trim();
+  const termsCheckbox = document.getElementById('signupTermsAccept');
+  const termsAccepted = termsCheckbox ? termsCheckbox.checked : false;
   const errorEl = document.getElementById('signupError');
   
   // Validate DJ name is required
@@ -9804,8 +9835,14 @@ async function handleSignup() {
     errorEl.classList.remove('hidden');
     return;
   }
+
+  if (!termsAccepted) {
+    errorEl.textContent = 'You must accept the Terms & Conditions and Privacy Policy to create an account';
+    errorEl.classList.remove('hidden');
+    return;
+  }
   
-  const result = await signUp(email, password, djName);
+  const result = await signUp(email, password, djName, termsAccepted);
   
   if (result.success) {
     showToast('✅ Welcome to Phone Party! Account created successfully!');

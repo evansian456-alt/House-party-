@@ -1357,7 +1357,7 @@ const uploadLimiter = (process.env.NODE_ENV === 'test' || process.env.DISABLE_RA
  */
 app.post("/api/auth/signup", authLimiter, async (req, res) => {
   try {
-    const { email, password, djName } = req.body;
+    const { email, password, djName, termsAccepted } = req.body;
 
     // Validate input
     if (!authMiddleware.isValidEmail(email)) {
@@ -1370,6 +1370,10 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
 
     if (!djName || djName.trim().length === 0) {
       return res.status(400).json({ error: 'DJ name is required' });
+    }
+
+    if (!termsAccepted) {
+      return res.status(400).json({ error: 'You must accept the Terms & Conditions and Privacy Policy to create an account' });
     }
 
     // Check if email already exists
@@ -1387,8 +1391,8 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
 
     // Create user — set profile_completed immediately since djName is collected at signup
     const result = await db.query(
-      `INSERT INTO users (email, password_hash, dj_name, profile_completed)
-       VALUES ($1, $2, $3, TRUE)
+      `INSERT INTO users (email, password_hash, dj_name, profile_completed, terms_accepted_at)
+       VALUES ($1, $2, $3, TRUE, NOW())
        RETURNING id, email, dj_name, created_at`,
       [email.toLowerCase(), passwordHash, djName.trim()]
     );

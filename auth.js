@@ -39,7 +39,7 @@ async function initAuth() {
 /**
  * Sign up new user
  */
-async function signUp(email, password, djName = '') {
+async function signUp(email, password, djName = '', termsAccepted = false) {
   if (!isValidEmail(email)) {
     return { success: false, error: 'Invalid email address' };
   }
@@ -50,6 +50,10 @@ async function signUp(email, password, djName = '') {
   
   if (!djName || djName.trim().length === 0) {
     return { success: false, error: 'DJ name is required' };
+  }
+
+  if (!termsAccepted) {
+    return { success: false, error: 'You must accept the Terms & Conditions and Privacy Policy' };
   }
   
   try {
@@ -62,7 +66,8 @@ async function signUp(email, password, djName = '') {
       body: JSON.stringify({
         email,
         password,
-        djName: djName.trim()
+        djName: djName.trim(),
+        termsAccepted
       })
     });
     

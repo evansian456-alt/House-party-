@@ -7805,13 +7805,35 @@ body {
 
 /* Version footer */
 .app-version-footer {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   text-align: center;
   font-size: 11px;
   color: rgba(255,255,255,0.25);
   padding: 6px 0 calc(6px + var(--safe-bottom));
   letter-spacing: 0.5px;
   user-select: none;
+}
+
+.footer-legal-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.footer-legal-links a,
+.app-version-footer a {
+  color: rgba(255,255,255,0.4);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.footer-legal-links a:hover,
+.app-version-footer a:hover {
+  color: rgba(255,255,255,0.7);
 }
 
 /* ============================================================
