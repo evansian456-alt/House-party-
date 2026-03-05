@@ -79,7 +79,8 @@ describeIfDb('Payment System', () => {
       .send({
         email,
         password: 'testpass123',
-        djName: 'Test DJ'
+        djName: 'Test DJ',
+        termsAccepted: true
       });
     
     expect(signupResponse.status).toBe(200);
