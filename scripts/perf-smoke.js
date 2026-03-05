@@ -109,6 +109,7 @@ async function main() {
     fs.mkdirSync(path.dirname(BASELINE_PATH), { recursive: true });
     fs.writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2) + '\n');
     console.log(`[perf:baseline] Written to ${BASELINE_PATH}`);
+    process.exit(0);
     return;
   }
 
@@ -140,6 +141,7 @@ async function main() {
   }
 
   console.log('[perf:smoke] ✅ All checks passed.');
+  process.exit(0);
 }
 
 main().catch((err) => {
