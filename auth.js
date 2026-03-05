@@ -87,10 +87,23 @@ async function signUp(email, password, djName = '', termsAccepted = false) {
       return { success: false, error: data.error || 'Signup failed', status: response.status };
     }
 
-    // Fetch full user data
-    const userData = await getCurrentUser();
-    if (userData) {
-      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(userData));
+    // Bootstrap a minimal session cache from the signup response so that
+    // isLoggedIn() returns true immediately without an extra /api/me round-trip.
+    // initAuthFlow() will replace this with the full /api/me payload shortly after.
+    if (data.user) {
+      const minimalSession = {
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          djName: data.user.djName,
+          profileCompleted: !!data.user.profileCompleted,
+          createdAt: data.user.createdAt
+        },
+        tier: 'FREE',
+        effectiveTier: 'FREE',
+        isAdmin: false
+      };
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(minimalSession));
     }
 
     return { success: true, user: sanitizeUser(data.user) };
