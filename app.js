@@ -9896,7 +9896,7 @@ function setupAuthEventListeners() {
         const result = await signUp(email, password, djName, true);
         if (result.success) {
           if (result.user && result.user.djName) {
-            saveProfile({ djName: result.user.djName, email: result.user.email || email, tier: USER_TIER.FREE });
+            saveProfile({ djName: result.user.djName, email: result.user.email || email, tier: state.selectedTier || USER_TIER.FREE });
           }
           showToast('✅ Account created! Welcome to Phone Party!');
           await initAuthFlow();
