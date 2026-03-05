@@ -5038,15 +5038,21 @@ function updatePartyPassUI() {
     }
   }
 
-  // Official App Sync: visible to host only when paid tier
+  // Streaming Party: show paid section to host when paid, show paywall to free users
   const officialAppSyncSection = el("officialAppSyncSection");
-  if (officialAppSyncSection) {
+  const streamingPartyPaywall = el("streamingPartyPaywall");
+  if (state.isHost) {
     const isPaid = hasPartyPassEntitlement() || hasProTierEntitlement();
-    if (isPaid && state.isHost) {
-      officialAppSyncSection.classList.remove("hidden");
-    } else {
-      officialAppSyncSection.classList.add("hidden");
+    if (officialAppSyncSection) {
+      officialAppSyncSection.classList[isPaid ? 'remove' : 'add']('hidden');
     }
+    if (streamingPartyPaywall) {
+      streamingPartyPaywall.classList[isPaid ? 'add' : 'remove']('hidden');
+    }
+  } else {
+    // Guests: hide both streaming party sections
+    if (officialAppSyncSection) officialAppSyncSection.classList.add('hidden');
+    if (streamingPartyPaywall) streamingPartyPaywall.classList.add('hidden');
   }
 }
 
@@ -12268,6 +12274,263 @@ function handleOfficialAppSyncTrackSelected(msg) {
   });
 })();
 
+// ============================================================================
+// STREAMING PARTY — Sync Modal, Sync Coach, TrackDescriptor
+// ============================================================================
+
+/**
+ * TrackDescriptor model — describes a track from any source.
+ * @typedef {Object} TrackDescriptor
+ * @property {'upload'|'youtube'|'spotify'|'soundcloud'} source
+ * @property {string} id
+ * @property {string|null} title
+ * @property {string|null} artist
+ * @property {string|null} artwork
+ * @property {string|null} deepLink
+ */
+
+/**
+ * Create a TrackDescriptor from provider and track reference.
+ * @param {string} source - 'upload' | 'youtube' | 'spotify' | 'soundcloud'
+ * @param {string} id - Track ID or URL
+ * @param {Object} [meta] - Optional metadata { title, artist, artwork }
+ * @returns {TrackDescriptor}
+ */
+function createTrackDescriptor(source, id, meta) {
+  const validSources = ['upload', 'youtube', 'spotify', 'soundcloud'];
+  const normalizedSource = (source || '').toLowerCase();
+  if (!validSources.includes(normalizedSource)) {
+    throw new Error('Invalid source: ' + source + '. Must be one of: ' + validSources.join(', '));
+  }
+
+  let deepLink = null;
+  if (normalizedSource === 'youtube') {
+    deepLink = 'https://www.youtube.com/watch?v=' + encodeURIComponent(id);
+  } else if (normalizedSource === 'spotify') {
+    deepLink = 'spotify:track:' + id;
+  } else if (normalizedSource === 'soundcloud') {
+    deepLink = id; // SoundCloud uses the full URL
+  }
+
+  return {
+    source: normalizedSource,
+    id: id,
+    title: (meta && meta.title) || null,
+    artist: (meta && meta.artist) || null,
+    artwork: (meta && meta.artwork) || null,
+    deepLink: deepLink
+  };
+}
+
+// Streaming Party state
+var _streamingPartyState = {
+  activeProvider: null,
+  trackDescriptor: null,
+  syncCoachInterval: null,
+  playbackStartMs: null
+};
+
+/**
+ * Open the Sync Information Modal for the given provider.
+ * Called when host clicks "Use Provider" on a provider card.
+ * @param {string} provider - 'youtube' | 'spotify' | 'soundcloud'
+ */
+function openSyncModal(provider) {
+  var modal = el('modalSyncInfo');
+  if (!modal) return;
+
+  _streamingPartyState.activeProvider = provider;
+
+  // Update badge
+  var badge = el('syncInfoProviderBadge');
+  if (badge) {
+    var labels = { youtube: '▶ YouTube', spotify: '💚 Spotify', soundcloud: '☁ SoundCloud' };
+    badge.textContent = labels[provider] || provider;
+  }
+
+  // Show provider-specific section
+  ['YouTube', 'Spotify', 'SoundCloud'].forEach(function(p) {
+    var sec = el('syncInfo' + p);
+    if (sec) {
+      sec.classList[p.toLowerCase() === provider ? 'remove' : 'add']('hidden');
+    }
+  });
+
+  // Wire up Continue button
+  var continueBtn = el('btnSyncInfoContinue');
+  if (continueBtn) {
+    continueBtn.onclick = function() {
+      closeSyncModal();
+      showStreamingTrackInput(provider);
+    };
+  }
+
+  modal.classList.remove('hidden');
+}
+
+/** Close the Sync Information Modal. */
+function closeSyncModal() {
+  var modal = el('modalSyncInfo');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * Show the track input section pre-set to the chosen provider.
+ * @param {string} provider
+ */
+function showStreamingTrackInput(provider) {
+  var trackInput = el('streamingTrackInput');
+  var platformSelect = el('syncPlatformSelect');
+  var providerLabel = el('selectedProviderLabel');
+  var providerCards = el('streamingProviderCards');
+
+  if (providerCards) providerCards.classList.add('hidden');
+
+  if (platformSelect) platformSelect.value = provider;
+  if (providerLabel) {
+    var names = { youtube: 'YouTube', spotify: 'Spotify', soundcloud: 'SoundCloud' };
+    providerLabel.textContent = '🎵 ' + (names[provider] || provider);
+  }
+  if (trackInput) trackInput.classList.remove('hidden');
+
+  // Update state for TrackDescriptor
+  _streamingPartyState.activeProvider = provider;
+}
+
+/** Reset the streaming track input UI to show provider cards. */
+function closeStreamingTrackInput() {
+  var trackInput = el('streamingTrackInput');
+  var providerCards = el('streamingProviderCards');
+  if (trackInput) trackInput.classList.add('hidden');
+  if (providerCards) providerCards.classList.remove('hidden');
+}
+
+// ============================================================================
+// SYNC COACH — guides guests to sync playback in external apps
+// ============================================================================
+
+/**
+ * Open the Sync Coach modal.
+ * @param {string} platform - e.g. 'youtube', 'spotify', 'soundcloud'
+ * @param {number} expectedPositionMs - Expected playback position in ms
+ */
+function openSyncCoach(platform, expectedPositionMs) {
+  var modal = el('modalSyncCoach');
+  if (!modal) return;
+
+  var platformLabel = el('syncCoachPlatformLabel');
+  if (platformLabel) {
+    var names = { youtube: 'YouTube', spotify: 'Spotify', soundcloud: 'SoundCloud' };
+    platformLabel.textContent = 'Syncing with ' + (names[platform] || platform);
+  }
+
+  // Set timestamp display
+  updateSyncCoachTimestamp(expectedPositionMs);
+
+  modal.classList.remove('hidden');
+
+  // Start updating timestamp every second
+  if (_streamingPartyState.syncCoachInterval) {
+    clearInterval(_streamingPartyState.syncCoachInterval);
+  }
+  if (_streamingPartyState.playbackStartMs) {
+    _streamingPartyState.syncCoachInterval = setInterval(function() {
+      var elapsed = Date.now() - _streamingPartyState.playbackStartMs;
+      updateSyncCoachTimestamp(elapsed);
+    }, 1000);
+  }
+}
+
+/** Update the Sync Coach timestamp display. */
+function updateSyncCoachTimestamp(ms) {
+  var el_ = el('syncCoachTimestamp');
+  if (!el_) return;
+  var totalSec = Math.max(0, Math.floor((ms || 0) / 1000));
+  var mins = Math.floor(totalSec / 60);
+  var secs = totalSec % 60;
+  el_.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+}
+
+/** Close the Sync Coach modal. */
+function closeSyncCoach() {
+  var modal = el('modalSyncCoach');
+  if (modal) modal.classList.add('hidden');
+  if (_streamingPartyState.syncCoachInterval) {
+    clearInterval(_streamingPartyState.syncCoachInterval);
+    _streamingPartyState.syncCoachInterval = null;
+  }
+}
+
+/**
+ * Handle a Sync Coach action button click.
+ * @param {'sync'|'playing'|'notplaying'} action
+ */
+function handleSyncCoachAction(action) {
+  var instructions = el('syncCoachInstructions');
+  if (!instructions) return;
+
+  if (action === 'sync') {
+    var driftSec = 3;
+    instructions.innerHTML =
+      '<strong>To sync:</strong><br>' +
+      '1. Pause playback.<br>' +
+      '2. Skip forward ~' + driftSec + ' seconds.<br>' +
+      '3. Resume — you should now be in sync.';
+    instructions.classList.remove('hidden');
+  } else if (action === 'playing') {
+    instructions.innerHTML = '<strong>Great!</strong> Stay at the displayed timestamp.';
+    instructions.classList.remove('hidden');
+  } else if (action === 'notplaying') {
+    instructions.innerHTML =
+      '<strong>To start:</strong><br>' +
+      '1. Open the track in your app.<br>' +
+      '2. Skip to the displayed timestamp.<br>' +
+      '3. Press play.';
+    instructions.classList.remove('hidden');
+  }
+}
+
+// ============================================================================
+// STREAMING PARTY — party playback state integration
+// ============================================================================
+
+/**
+ * PartyPlaybackState extended to include trackDescriptor for streaming providers.
+ * This supplements the existing OFFICIAL_APP_SYNC message handler.
+ */
+function buildStreamingPartyPlaybackState(trackDescriptor, startedAtPartyMs, status) {
+  return {
+    trackDescriptor: trackDescriptor || null,
+    startedAtPartyMs: startedAtPartyMs || null,
+    status: status || 'idle'
+  };
+}
+
+// Override handleOfficialAppSyncTrackSelected to also update streaming party state
+var _originalHandleOfficialAppSyncTrackSelected = typeof handleOfficialAppSyncTrackSelected === 'function'
+  ? handleOfficialAppSyncTrackSelected : null;
+
+// Wire Sync Coach for guests when TRACK_SELECTED arrives with OFFICIAL_APP_SYNC mode
+(function patchSyncCoachOnTrackSelected() {
+  var _origHandler = window._streamingPartyPatched ? null : null;
+  // Listen for TRACK_SELECTED — the original handler fires toast + UI update.
+  // We augment it: if user is a guest, open Sync Coach after a short delay.
+  document.addEventListener('streamingPartyTrackSelected', function(evt) {
+    var detail = evt.detail || {};
+    if (!state.isHost && detail.platform) {
+      _streamingPartyState.playbackStartMs = detail.playbackStartMs || Date.now();
+      setTimeout(function() {
+        var elapsed = Date.now() - _streamingPartyState.playbackStartMs;
+        openSyncCoach(detail.platform, elapsed);
+      }, 800);
+    }
+  });
+})();
+
+// ============================================================================
+// END STREAMING PARTY
+// ============================================================================
+
 // Test/module exports (for Jest) — allows require() in tests; not reached in browsers.
 // In the browser this block is never reached (no `module` global).
 if (typeof module !== 'undefined' && module.exports) {
@@ -12290,5 +12553,12 @@ if (typeof module !== 'undefined' && module.exports) {
     handleLogout,
     state,
     USER_TIER,
+    createTrackDescriptor,
+    buildStreamingPartyPlaybackState,
+    openSyncModal,
+    closeSyncModal,
+    openSyncCoach,
+    closeSyncCoach,
+    handleSyncCoachAction,
   };
 }

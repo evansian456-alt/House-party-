@@ -62,4 +62,33 @@ function isPaidForOfficialAppSync(tier) {
   return getPolicyForTier(tier).officialAppSync === true;
 }
 
-module.exports = { TIER_POLICY, getPolicyForTier, isPaidForOfficialAppSync };
+/**
+ * Whether the given user object has access to Streaming Party features.
+ * Streaming Party is available for Party Pass and Pro tiers only.
+ *
+ * Accepts a user object that may include any of:
+ *   { tier, effectiveTier, entitlements: { hasPartyPass, hasPro } }
+ *
+ * @param {Object} user - User object or entitlement descriptor
+ * @returns {boolean}
+ */
+function hasStreamingAccess(user) {
+  if (!user) return false;
+
+  // Check entitlements object (from /api/me)
+  if (user.entitlements) {
+    if (user.entitlements.hasPartyPass || user.entitlements.hasPro) return true;
+  }
+
+  // Check effectiveTier (admin-resolved tier)
+  const effectiveTier = (user.effectiveTier || '').toUpperCase();
+  if (effectiveTier === 'PARTY_PASS' || effectiveTier === 'PRO' || effectiveTier === 'PRO_MONTHLY') {
+    return true;
+  }
+
+  // Check tier field directly
+  const tier = (user.tier || '').toUpperCase();
+  return isPaidForOfficialAppSync(tier);
+}
+
+module.exports = { TIER_POLICY, getPolicyForTier, isPaidForOfficialAppSync, hasStreamingAccess };
