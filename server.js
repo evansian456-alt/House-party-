@@ -59,7 +59,7 @@ const { initRateLimiter, checkRateLimit, clearClientRateLimit } = require('./rat
 const { validateSessionCreation, validateSessionJoin, validateFeatureAccess, getTierLimits, isPartyPassActive: checkPartyPassActive } = require('./entitlement-validator');
 
 // Import tier policy (single source of truth for tier limits)
-const { isPaidForOfficialAppSync: tierPolicyIsPaidForOfficialAppSync, getPolicyForTier } = require('./tier-policy');
+const { isPaidForOfficialAppSync: tierPolicyIsPaidForOfficialAppSync, getPolicyForTier, hasStreamingAccess } = require('./tier-policy');
 
 // Import platform normalizer for Official App Sync track references
 const { normalizePlatformTrackRef } = require('./platform-normalizer');
@@ -965,6 +965,13 @@ app.get("/public/assets/platform-logos/:platform.svg", staticLimiter, (req, res)
   if (!ALLOWED_PLATFORM_LOGOS.has(req.params.platform)) return res.status(404).end();
   res.setHeader('Cache-Control', NO_CACHE);
   res.sendFile(path.join(__dirname, "public/assets/platform-logos", `${req.params.platform}.svg`));
+});
+
+// Streaming Party provider SVG assets — identical allowlist, served from providers/ directory
+app.get("/public/assets/providers/:platform.svg", staticLimiter, (req, res) => {
+  if (!ALLOWED_PLATFORM_LOGOS.has(req.params.platform)) return res.status(404).end();
+  res.setHeader('Cache-Control', NO_CACHE);
+  res.sendFile(path.join(__dirname, "public/assets/providers", `${req.params.platform}.svg`));
 });
 
 // Diagnostic endpoint — returns version info so you can confirm which build is
@@ -5571,8 +5578,142 @@ app.post('/api/referral/track', apiLimiter, authMiddleware.requireAuth, async (r
 });
 
 // ============================================================================
-// STRIPE PRICE IDs (canonical product identifiers)
+// STREAMING PARTY ENDPOINTS
 // ============================================================================
+
+/**
+ * GET /api/streaming/providers
+ * Returns the list of supported streaming providers.
+ * Requires Party Pass or Pro tier — returns 403 for FREE users.
+ */
+app.get('/api/streaming/providers', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const upgrades = await db.getOrCreateUserUpgrades(userId);
+    const { hasPartyPass, hasPro } = db.resolveEntitlements(upgrades);
+    const userObj = { entitlements: { hasPartyPass, hasPro } };
+
+    if (!hasStreamingAccess(userObj)) {
+      return res.status(403).json({
+        error: 'Streaming Party requires Party Pass or Pro.',
+        upgradeRequired: true
+      });
+    }
+
+    return res.json({
+      providers: [
+        {
+          id: 'youtube',
+          name: 'YouTube',
+          description: 'Playback starts together using party clock.',
+          deepLinkTemplate: 'https://www.youtube.com/watch?v={id}',
+          accuracy: '40–150ms'
+        },
+        {
+          id: 'spotify',
+          name: 'Spotify',
+          description: 'Playback occurs in the Spotify app. The app will guide synchronization.',
+          deepLinkTemplate: 'spotify:track:{id}',
+          webFallback: 'https://open.spotify.com/track/{id}',
+          accuracy: 'variable'
+        },
+        {
+          id: 'soundcloud',
+          name: 'SoundCloud',
+          description: 'Direct streams behave similar to uploads.',
+          deepLinkTemplate: '{url}',
+          accuracy: '40–150ms'
+        }
+      ]
+    });
+  } catch (error) {
+    console.error('[StreamingParty] Get providers error:', error.message);
+    return res.status(500).json({ error: 'Failed to get providers' });
+  }
+});
+
+/**
+ * POST /api/streaming/select-track
+ * Host selects a track from a streaming provider.
+ * Requires Party Pass or Pro tier — returns 403 for FREE users.
+ *
+ * Body: { partyCode, provider, trackId, title?, artist?, artwork? }
+ */
+app.post('/api/streaming/select-track', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const upgrades = await db.getOrCreateUserUpgrades(userId);
+    const { hasPartyPass, hasPro } = db.resolveEntitlements(upgrades);
+    const userObj = { entitlements: { hasPartyPass, hasPro } };
+
+    if (!hasStreamingAccess(userObj)) {
+      return res.status(403).json({
+        error: 'Streaming Party requires Party Pass or Pro.',
+        upgradeRequired: true
+      });
+    }
+
+    const { partyCode, provider, trackId, title, artist, artwork } = req.body;
+
+    if (!partyCode || !provider || !trackId) {
+      return res.status(400).json({ error: 'partyCode, provider, and trackId are required' });
+    }
+
+    const validProviders = ['youtube', 'spotify', 'soundcloud'];
+    if (!validProviders.includes((provider || '').toLowerCase())) {
+      return res.status(400).json({ error: `Invalid provider. Must be one of: ${validProviders.join(', ')}` });
+    }
+
+    // Build deep link
+    const providerLower = provider.toLowerCase();
+    let deepLink;
+    if (providerLower === 'youtube') {
+      deepLink = `https://www.youtube.com/watch?v=${encodeURIComponent(trackId)}`;
+    } else if (providerLower === 'spotify') {
+      deepLink = `spotify:track:${trackId}`;
+    } else {
+      deepLink = trackId; // SoundCloud uses the full URL as trackId
+    }
+
+    const trackDescriptor = {
+      source: providerLower,
+      id: trackId,
+      title: title || null,
+      artist: artist || null,
+      artwork: artwork || null,
+      deepLink
+    };
+
+    return res.json({ success: true, trackDescriptor });
+  } catch (error) {
+    console.error('[StreamingParty] Select track error:', error.message);
+    return res.status(500).json({ error: 'Failed to select track' });
+  }
+});
+
+/**
+ * GET /api/streaming/access
+ * Check if the authenticated user has Streaming Party access.
+ */
+app.get('/api/streaming/access', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const upgrades = await db.getOrCreateUserUpgrades(userId);
+    const { hasPartyPass, hasPro } = db.resolveEntitlements(upgrades);
+    const userObj = { entitlements: { hasPartyPass, hasPro } };
+    const allowed = hasStreamingAccess(userObj);
+
+    return res.json({
+      allowed,
+      reason: allowed ? null : 'Streaming Party requires Party Pass or Pro.'
+    });
+  } catch (error) {
+    console.error('[StreamingParty] Access check error:', error.message);
+    return res.status(500).json({ error: 'Failed to check streaming access' });
+  }
+});
+
+
 const STRIPE_PRICE_PARTY_PASS = process.env.STRIPE_PRICE_PARTY_PASS || 'price_1T730tK3GhmyOKSB36mifw84';
 const STRIPE_PRICE_PRO_MONTHLY = process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_1T733rK3GhmyOKSBsghjQPUZ';
 const STRIPE_SERVICE_URL = 'https://syncspeaker-262593928124.us-central1.run.app';
