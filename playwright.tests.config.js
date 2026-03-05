@@ -41,8 +41,8 @@ module.exports = defineConfig({
 
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:8080',
-    trace: 'on',
-    screenshot: 'on',
+    trace: process.env.CI ? 'on' : 'retain-on-failure',
+    screenshot: process.env.CI ? 'on' : 'only-on-failure',
     video: 'retain-on-failure',
   },
 
