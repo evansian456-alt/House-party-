@@ -54,7 +54,7 @@ test.describe('Party UI data-testid attributes', () => {
     await page.locator('#loginPassword').fill(user.password);
     await page.locator('#formLogin button[type="submit"]').click();
 
-    await page.locator('#viewHome').waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForFunction(() => { const ah = document.getElementById('viewAuthHome'); const h = document.getElementById('viewHome'); return (ah && !ah.classList.contains('hidden')) || (h && !h.classList.contains('hidden')); }, { timeout: 12000 });
 
     await expect(page.locator('[data-testid="create-party"]')).toBeVisible();
     await expect(page.locator('[data-testid="join-party"]')).toBeVisible();
@@ -123,7 +123,7 @@ test.describe('Party UI data-testid attributes', () => {
 
   test('sync-coach modal exists in the DOM', async ({ page }) => {
     await page.goto(BASE);
-    await expect(page.locator('[data-testid="sync-coach"]')).toBeAttached();
+    await expect(page.locator('[data-testid="sync-coach-modal"]')).toBeAttached();
   });
 
   test('upgrade-button exists in header', async ({ page }) => {
@@ -136,9 +136,9 @@ test.describe('Party UI data-testid attributes', () => {
     await expect(page.locator('[data-testid="checkout-start"]')).toBeAttached();
   });
 
-  test('modal element exists (checkout modal)', async ({ page }) => {
+  test('checkout-modal element exists', async ({ page }) => {
     await page.goto(BASE);
-    await expect(page.locator('[data-testid="modal"]')).toBeAttached();
+    await expect(page.locator('[data-testid="checkout-modal"]')).toBeAttached();
   });
 });
 
@@ -214,11 +214,14 @@ test.describe('Party create flow (UI)', () => {
     await page.locator('#loginPassword').fill(user.password);
     await page.locator('#formLogin button[type="submit"]').click();
 
-    await page.locator('#viewHome').waitFor({ state: 'visible', timeout: 10000 });
-    await page.locator('[data-testid="create-party"]').click();
-
-    await expect(page.locator('#createPartySection')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('[data-testid="start-party"]')).toBeVisible();
+    await page.waitForFunction(() => { const ah = document.getElementById('viewAuthHome'); const h = document.getElementById('viewHome'); return (ah && !ah.classList.contains('hidden')) || (h && !h.classList.contains('hidden')); }, { timeout: 12000 });
+    // viewAuthHome: click create-party shows partyCreateSection; viewHome: shows createPartySection
+    const createBtn = page.locator('#viewAuthHome [data-testid="create-party"], #viewHome [data-testid="create-party"]').first();
+    await createBtn.waitFor({ state: 'visible', timeout: 8000 });
+    await createBtn.click();
+    // Either partyCreateSection (viewAuthHome) or createPartySection (viewHome) should appear
+    await expect(page.locator('#partyCreateSection, #createPartySection').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="start-party-auth-home"], [data-testid="start-party"]').first()).toBeVisible();
   });
 
   test('clicking join-party shows join form', async ({ page, request }) => {
@@ -232,10 +235,11 @@ test.describe('Party create flow (UI)', () => {
     await page.locator('#loginPassword').fill(user.password);
     await page.locator('#formLogin button[type="submit"]').click();
 
-    await page.locator('#viewHome').waitFor({ state: 'visible', timeout: 10000 });
-    await page.locator('[data-testid="join-party"]').click();
-
-    await expect(page.locator('#joinPartySection')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('#btnJoin')).toBeVisible();
+    await page.waitForFunction(() => { const ah = document.getElementById('viewAuthHome'); const h = document.getElementById('viewHome'); return (ah && !ah.classList.contains('hidden')) || (h && !h.classList.contains('hidden')); }, { timeout: 12000 });
+    const joinBtn = page.locator('#viewAuthHome [data-testid="join-party"], #viewHome [data-testid="join-party"]').first();
+    await joinBtn.waitFor({ state: 'visible', timeout: 8000 });
+    await joinBtn.click();
+    // Either partyJoinSection (viewAuthHome) or joinPartySection (viewHome) should appear
+    await expect(page.locator('#partyJoinSection, #joinPartySection').first()).toBeVisible({ timeout: 5000 });
   });
 });

@@ -83,7 +83,7 @@ describeIfDb('Payment System', () => {
         termsAccepted: true
       });
     
-    expect(signupResponse.status).toBe(200);
+    expect(signupResponse.status).toBe(201);
     expect(signupResponse.body.user).toBeDefined();
     expect(signupResponse.body.user.id).toBeDefined();
     

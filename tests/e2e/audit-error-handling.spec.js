@@ -44,7 +44,7 @@ test.describe('Unauthenticated access protection', () => {
     // Should succeed (200) since the endpoint is open
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
-    expect(body.partyCode || body.error).toBeTruthy();
+    expect(body.partyCode).toBeTruthy();
   });
 
   test('GET /api/user/entitlements returns 401 without auth', async ({ request }) => {

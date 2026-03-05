@@ -324,7 +324,7 @@ test.describe('Click-Everything Audit', () => {
     if (await partyPassBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await partyPassBtn.click();
       // Should show checkout modal
-      const modal = page.locator('#modalCheckout, [data-testid="modal"]');
+      const modal = page.locator('#modalCheckout, [data-testid="checkout-modal"]');
       await expect(modal).toBeVisible({ timeout: 8_000 });
       await screenshot(page, 'upgrade_checkout_modal');
 
