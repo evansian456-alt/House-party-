@@ -1354,59 +1354,87 @@ app.get("/api/routes", (req, res) => {
 // RATE LIMITERS
 // ============================================================================
 
+/**
+ * Returns true when rate limiting should be bypassed.
+ * Bypassed in test mode (NODE_ENV=test) and when DISABLE_RATE_LIMIT=true
+ * (for CI/E2E audit runs). Evaluated at request time so env changes
+ * made after module load (e.g. in integration tests) are respected.
+ */
+function shouldBypassRateLimit() {
+  return process.env.NODE_ENV === 'test' || process.env.DISABLE_RATE_LIMIT === 'true';
+}
+
+/** No-op middleware used when rate limiting is bypassed. */
+const rateLimitBypass = (req, res, next) => next();
+
+/**
+ * Custom rate-limit handler that always returns application/json so clients
+ * (including the frontend auth.js) can reliably parse the error body.
+ */
+function jsonRateLimitHandler(req, res, next, options) {
+  res.status(options.statusCode).json(options.message);
+}
+
 // Rate limiter for auth endpoints (stricter)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 requests per windowMs (allows for typos)
-  message: 'Too many authentication attempts, please try again later',
-  standardHeaders: true,
-  legacyHeaders: false,
-  // Disable rate limiting in test mode so integration tests can call /signup freely
-  skip: () => process.env.NODE_ENV === 'test',
-});
+// Returns JSON so the frontend can display a proper error message (not "Server returned non-JSON error").
+const authLimiter = shouldBypassRateLimit()
+  ? rateLimitBypass
+  : rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 10, // Limit each IP to 10 requests per windowMs (allows for typos)
+      // JSON message so clients always get a parseable error body
+      message: { error: 'Too many authentication attempts, please try again later' },
+      standardHeaders: true,
+      legacyHeaders: false,
+      handler: jsonRateLimitHandler,
+    });
 
 // Rate limiter for general API endpoints
+// Skip in test/CI mode to prevent E2E test suites from exhausting the per-IP budget
+// (many tests call /api/me repeatedly from the same loopback address).
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 30, // Limit each IP to 30 requests per minute
-  message: 'Too many requests, please try again later',
+  message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: shouldBypassRateLimit,
+  handler: jsonRateLimitHandler,
 });
 
 // Rate limiter for purchase endpoints
 const purchaseLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 10, // Limit each IP to 10 requests per minute
-  message: 'Too many purchase requests, please try again later',
+  message: { error: 'Too many purchase requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
-  // Disable in test mode so integration tests can issue multiple payment requests
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: shouldBypassRateLimit,
+  handler: jsonRateLimitHandler,
 });
 
 // Rate limiter for party creation (security: prevent abuse)
-// Bypass in test mode to avoid flaky tests
-const partyCreationLimiter = (process.env.NODE_ENV === 'test' || process.env.DISABLE_RATE_LIMIT === 'true')
-  ? (req, res, next) => next() // Bypass in test mode
+const partyCreationLimiter = shouldBypassRateLimit()
+  ? rateLimitBypass
   : rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
       max: 5, // Limit each IP to 5 party creations per 15 minutes
-      message: 'Too many party creation attempts, please try again later',
+      message: { error: 'Too many party creation attempts, please try again later' },
       standardHeaders: true,
       legacyHeaders: false,
+      handler: jsonRateLimitHandler,
     });
 
 // Rate limiter for upload endpoints (security: prevent abuse)
-// Bypass in test mode to avoid flaky tests
-const uploadLimiter = (process.env.NODE_ENV === 'test' || process.env.DISABLE_RATE_LIMIT === 'true')
-  ? (req, res, next) => next() // Bypass in test mode
+const uploadLimiter = shouldBypassRateLimit()
+  ? rateLimitBypass
   : rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
       max: 10, // Limit each IP to 10 uploads per 15 minutes
-      message: 'Too many upload requests, please try again later',
+      message: { error: 'Too many upload requests, please try again later' },
       standardHeaders: true,
       legacyHeaders: false,
+      handler: jsonRateLimitHandler,
     });
 
 // ============================================================================
