@@ -2,16 +2,16 @@
 /**
  * scripts/sync-summarize.js
  *
- * Reads artifacts/sync/*.json and prints a human-readable summary:
- * - drift p50/p95/max
- * - RTT p50/p95
- * - correction counts
- * - hard resync counts
- * - offset stddev
+ * Reads artifacts/sync/*.json and prints a summary table:
+ *   - drift p50/p95/max
+ *   - RTT p50/p95 (from first snapshot client metrics)
+ *   - correction counts
+ *   - hard resync counts
+ *   - offset stddev
  *
  * Usage:
  *   node scripts/sync-summarize.js
- *   node scripts/sync-summarize.js [--json]  (machine-readable output)
+ *   node scripts/sync-summarize.js --json       (machine-readable output)
  */
 
 'use strict';
@@ -19,166 +19,138 @@
 const fs = require('fs');
 const path = require('path');
 
-const ARTIFACTS_DIR = path.resolve(__dirname, '..', 'artifacts', 'sync');
+const ARTIFACTS_DIR = path.resolve(__dirname, '../artifacts/sync');
 const isJson = process.argv.includes('--json');
 
-// ── helpers ────────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────────
 
-function avg(arr) {
-  if (!arr || arr.length === 0) return 0;
-  return arr.reduce((a, b) => a + b, 0) / arr.length;
+function pct(arr, p) {
+  if (!arr.length) return null;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const idx = Math.max(0, Math.ceil((p / 100) * sorted.length) - 1);
+  return sorted[idx];
 }
 
-function fmt(n, decimals = 1) {
-  if (n == null || !isFinite(n)) return 'N/A';
-  return Number(n).toFixed(decimals);
+function mean(arr) {
+  if (!arr.length) return null;
+  return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-function loadArtifacts() {
-  if (!fs.existsSync(ARTIFACTS_DIR)) {
-    console.error(`[sync-summarize] Artifacts directory not found: ${ARTIFACTS_DIR}`);
-    console.error('  Run the sync metrics harness first: npm run test:e2e (with SYNC_TEST_MODE=true)');
-    process.exit(1);
+function fmt(v, decimals = 1) {
+  if (v === null || v === undefined) return 'n/a';
+  return typeof v === 'number' ? v.toFixed(decimals) : String(v);
+}
+
+// ─── Read artifacts ─────────────────────────────────────────────────────────────
+
+if (!fs.existsSync(ARTIFACTS_DIR)) {
+  console.error(`[sync-summarize] Artifacts directory not found: ${ARTIFACTS_DIR}`);
+  console.error('Run the sync metrics harness first: npm run test:e2e');
+  process.exit(1);
+}
+
+const files = fs.readdirSync(ARTIFACTS_DIR)
+  .filter(f => f.endsWith('.json') && f !== '.gitkeep');
+
+if (!files.length) {
+  console.error('[sync-summarize] No JSON artifact files found in', ARTIFACTS_DIR);
+  console.error('Run the sync metrics harness first: npm run test:e2e');
+  process.exit(1);
+}
+
+const results = [];
+
+for (const file of files.sort()) {
+  const fullPath = path.join(ARTIFACTS_DIR, file);
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+  } catch (err) {
+    console.warn(`[sync-summarize] Skipping ${file}: ${err.message}`);
+    continue;
   }
 
-  const files = fs.readdirSync(ARTIFACTS_DIR)
-    .filter(f => f.endsWith('.json') && f !== '.gitkeep')
-    .sort();
+  // Handle both "raw artifact" format and pre-summarized format
+  const scenario = data.scenario || file.replace('.json', '');
+  const summary = data.summary || {};
+  const rawSnapshots = summary.rawSnapshots || data.rawSnapshots || [];
 
-  if (files.length === 0) {
-    console.error('[sync-summarize] No artifact files found in', ARTIFACTS_DIR);
-    console.error('  Run: SYNC_TEST_MODE=true npm run test:e2e');
-    process.exit(1);
-  }
+  // Collect per-client metrics across snapshots
+  const rttMedians = [];
+  const rttP95s = [];
+  const clockOffsetStddevs = [];
+  const driftP95s = [];
+  const correctionCounts = [];
+  const hardResyncCounts = [];
 
-  return files.map(f => {
-    try {
-      const content = fs.readFileSync(path.join(ARTIFACTS_DIR, f), 'utf-8');
-      return { file: f, data: JSON.parse(content) };
-    } catch (e) {
-      console.warn(`[sync-summarize] Could not parse ${f}: ${e.message}`);
-      return null;
+  for (const snap of rawSnapshots) {
+    // Party-level metrics
+    if (typeof snap.party?.driftP95Ms === 'number') driftP95s.push(snap.party.driftP95Ms);
+
+    // Per-client metrics
+    for (const c of snap.clients || []) {
+      if (typeof c.rttMedianMs === 'number') rttMedians.push(c.rttMedianMs);
+      if (typeof c.rttP95Ms === 'number') rttP95s.push(c.rttP95Ms);
+      if (typeof c.clockOffsetStddev === 'number') clockOffsetStddevs.push(c.clockOffsetStddev);
+      if (typeof c.correctionCount === 'number') correctionCounts.push(c.correctionCount);
+      if (typeof c.hardResyncCount === 'number') hardResyncCounts.push(c.hardResyncCount);
     }
-  }).filter(Boolean);
-}
+  }
 
-// ── main ───────────────────────────────────────────────────────────────────────
+  const totalHardResyncs = hardResyncCounts.reduce((s, v) => s + v, 0);
+  const totalCorrections = correctionCounts.reduce((s, v) => s + v, 0);
 
-function summarize(artifact) {
-  const { file, data } = artifact;
-
-  const summary = {
+  results.push({
+    scenario,
     file,
-    label: data.label || file.replace('.json', ''),
-    timestamp: data.timestamp || 'unknown',
-    sampleCount: data.sampleCount || 0,
-    note: data.note || null
-  };
-
-  if (data.sampleCount === 0 || data.note) {
-    summary.status = 'NO_DATA';
-    return summary;
-  }
-
-  summary.status = 'OK';
-  summary.uptimeSec = data.uptimeSec;
-  summary.totalClients = data.totalClients;
-
-  // Party-level drift
-  summary.avgDriftP50Ms = data.avgDriftP50Ms;
-  summary.avgDriftP95Ms = data.avgDriftP95Ms;
-  summary.maxDriftMs = data.maxDriftMs;
-
-  // Corrections
-  summary.finalCorrectionCount = data.finalCorrectionCount;
-  summary.finalHardResyncCount = data.finalHardResyncCount;
-
-  // Per-client details (if available)
-  if (data.clients && data.clients.length > 0) {
-    summary.clients = data.clients.map(c => ({
-      clientId: c.clientId,
-      rttMedianMs: c.rttMedianMs,
-      rttP95Ms: c.rttP95Ms,
-      clockOffsetMs: c.clockOffsetMs,
-      clockOffsetStdDev: c.clockOffsetStdDev,
-      driftP50Ms: c.driftP50Ms,
-      driftP95Ms: c.driftP95Ms,
-      correctionCount: c.correctionCount,
-      hardResyncCount: c.hardResyncCount,
-      networkStability: c.networkStability
-    }));
-
-    // Aggregate RTT from client data
-    const rttMedians = data.clients.map(c => c.rttMedianMs).filter(v => v != null && v > 0);
-    const rttP95s = data.clients.map(c => c.rttP95Ms).filter(v => v != null && v > 0);
-    summary.avgRttMedianMs = avg(rttMedians);
-    summary.avgRttP95Ms = avg(rttP95s);
-    summary.avgClockOffsetStdDev = avg(data.clients.map(c => c.clockOffsetStdDev).filter(v => v != null));
-  }
-
-  return summary;
+    snapshotCount: summary.snapshotCount || rawSnapshots.length,
+    stableSnapshotCount: summary.stableSnapshotCount || rawSnapshots.length,
+    drift: {
+      p50Ms: pct(driftP95s, 50),
+      p95Ms: pct(driftP95s, 95),
+      maxMs: summary.driftMaxMs || (driftP95s.length ? Math.max(...driftP95s) : null),
+    },
+    rtt: {
+      medianMs: pct(rttMedians, 50),
+      p95Ms: pct(rttP95s, 95),
+    },
+    clockOffsetStddev: {
+      meanMs: mean(clockOffsetStddevs),
+      maxMs: clockOffsetStddevs.length ? Math.max(...clockOffsetStddevs) : null,
+    },
+    corrections: {
+      total: totalCorrections,
+      hardResyncs: totalHardResyncs,
+      maxRateChangesPerMin: summary.maxRateChangesPerMin || null,
+    },
+    collectedAt: data.collectedAt,
+    durationMs: data.durationMs,
+  });
 }
 
-function printSummary(summary) {
-  console.log('');
-  console.log(`┌─────────────────────────────────────────────────────`);
-  console.log(`│  ${summary.label.toUpperCase()}  (${summary.timestamp})`);
-  console.log(`└─────────────────────────────────────────────────────`);
-
-  if (summary.status === 'NO_DATA') {
-    console.log(`  ⚠  No data: ${summary.note || 'no samples collected'}`);
-    return;
-  }
-
-  console.log(`  Uptime:        ${fmt(summary.uptimeSec, 0)}s  |  Clients: ${summary.totalClients}`);
-  console.log(`  Samples:       ${summary.sampleCount}`);
-  console.log('');
-  console.log('  Drift:');
-  console.log(`    p50:         ${fmt(summary.avgDriftP50Ms)}ms`);
-  console.log(`    p95:         ${fmt(summary.avgDriftP95Ms)}ms`);
-  console.log(`    max:         ${fmt(summary.maxDriftMs)}ms`);
-  console.log('');
-  console.log('  Corrections:');
-  console.log(`    Rate:        ${summary.finalCorrectionCount}`);
-  console.log(`    Hard resync: ${summary.finalHardResyncCount}`);
-
-  if (summary.avgRttMedianMs != null) {
-    console.log('');
-    console.log('  RTT (across clients):');
-    console.log(`    median:      ${fmt(summary.avgRttMedianMs)}ms`);
-    console.log(`    p95:         ${fmt(summary.avgRttP95Ms)}ms`);
-    console.log(`    offset σ:    ${fmt(summary.avgClockOffsetStdDev)}ms`);
-  }
-
-  if (summary.clients && summary.clients.length > 0) {
-    console.log('');
-    console.log('  Per-client:');
-    summary.clients.forEach(c => {
-      console.log(`    [${c.clientId?.substring(0, 12) || '?'}]  RTT=${fmt(c.rttMedianMs)}ms  driftP95=${fmt(c.driftP95Ms)}ms  corrections=${c.correctionCount}  resyncs=${c.hardResyncCount}  stability=${fmt(c.networkStability, 2)}`);
-    });
-  }
-
-  // Quality indicator
-  console.log('');
-  const p95 = summary.avgDriftP95Ms;
-  let quality = '✅ GOOD';
-  if (p95 > 200) quality = '⚠️  WARN (p95 > 200ms)';
-  if (p95 > 500) quality = '❌ POOR (p95 > 500ms)';
-  console.log(`  Quality:       ${quality}`);
-}
-
-// ── run ────────────────────────────────────────────────────────────────────────
-
-const artifacts = loadArtifacts();
-const summaries = artifacts.map(summarize);
+// ─── Output ─────────────────────────────────────────────────────────────────────
 
 if (isJson) {
-  console.log(JSON.stringify(summaries, null, 2));
-} else {
-  console.log('\n=== Sync Engine Measurement Summary ===');
-  console.log('=== Generated by scripts/sync-summarize.js ===');
-  summaries.forEach(printSummary);
-  console.log('');
-  console.log('Run with --json for machine-readable output.');
-  console.log('');
+  console.log(JSON.stringify(results, null, 2));
+  process.exit(0);
+}
+
+console.log('\n╔══════════════════════════════════════════════════════════════════╗');
+console.log('║              Sync Engine Metrics Summary                         ║');
+console.log('╚══════════════════════════════════════════════════════════════════╝\n');
+
+for (const r of results) {
+  console.log(`┌─ Scenario: ${r.scenario} (${r.file})`);
+  console.log(`│  Collected: ${r.collectedAt || 'n/a'}  Duration: ${r.durationMs ? (r.durationMs / 1000).toFixed(0) + 's' : 'n/a'}`);
+  console.log(`│  Snapshots: ${r.snapshotCount} (stable: ${r.stableSnapshotCount})`);
+  console.log('│');
+  console.log(`│  Drift:   p50=${fmt(r.drift.p50Ms)}ms  p95=${fmt(r.drift.p95Ms)}ms  max=${fmt(r.drift.maxMs)}ms`);
+  console.log(`│  RTT:     median=${fmt(r.rtt.medianMs)}ms  p95=${fmt(r.rtt.p95Ms)}ms`);
+  console.log(`│  Offset stddev: mean=${fmt(r.clockOffsetStddev.meanMs)}ms  max=${fmt(r.clockOffsetStddev.maxMs)}ms`);
+  console.log(`│  Corrections: total=${r.corrections.total}  hardResyncs=${r.corrections.hardResyncs}  maxRate/min=${fmt(r.corrections.maxRateChangesPerMin, 0)}`);
+  console.log('└─────────────────────────────────────────────────────────────────\n');
+}
+
+if (results.length === 0) {
+  console.log('No results to display.');
 }

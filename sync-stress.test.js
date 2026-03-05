@@ -259,11 +259,9 @@ describe('Drift Correction Under Stress', () => {
     // Should detect desync
     expect(Math.abs(client.lastDrift)).toBeGreaterThan(DESYNC_THRESHOLD_MS);
     
-    // PLL produces a bounded correction (negative for positive/ahead drift)
-    // Rate delta is capped to ±1% (stable) or ±2% (unstable), then EMA-smoothed.
+    // Should calculate strong correction
     const adjustment = client.calculateDriftCorrection();
-    expect(adjustment).toBeLessThan(0); // Negative: slow down to catch up
-    expect(Math.abs(adjustment)).toBeGreaterThan(0); // Non-zero correction
+    expect(Math.abs(adjustment)).toBeGreaterThan(0.1);
   });
 
   test('should not over-correct small drift', () => {

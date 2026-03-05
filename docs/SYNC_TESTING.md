@@ -1,209 +1,191 @@
 # Sync Engine Testing Guide
 
-This document explains how to measure, tune, and validate the sync engine on real devices and in automated CI.
+This document explains how to test and tune the sync engine on real devices and in CI.
+
+## Overview
+
+The sync engine uses a **PLL (Phase-Locked Loop)** style approach to keep all connected devices playing audio at the same position:
+
+1. **Monotonic clocks** – server uses `process.hrtime.bigint()`, client uses `performance.now()`, both anchored to wall-clock at startup. This avoids NTP jumps.
+2. **Rolling-window NTP** – 15-sample rolling window, top 20% RTT outliers discarded, EMA-smoothed clock offset (α=0.15).
+3. **PLL drift correction** – dead-band (ignore <40ms), rate-correction (40–200ms), hard seek (≥200ms).
+4. **Hard-seek cooldown** – prevents seek oscillation (15s minimum between seeks per client).
+5. **Audio latency compensation** – optional, learns device output latency bias slowly (enabled in SYNC_TEST_MODE).
 
 ---
 
-## Architecture Overview
-
-The upgraded sync engine uses:
-
-| Phase | Feature | File |
-|-------|---------|------|
-| 1 | Monotonic clocks (`hrtime.bigint` / `performance.now()`) | `sync-engine.js`, `sync-client.js` |
-| 2 | NTP-style rolling-window offset estimation (outlier rejection + EMA) | `sync-engine.js` |
-| 3 | PLL-style drift correction (deadband, horizon, rate smoothing, caps) | `sync-engine.js` |
-| 4 | Safe hard resync (seek) with cooldown protection | `sync-engine.js` |
-| 5 | Precise scheduling near playback target | `sync-client.js` |
-| 6 | Per-device learned audio latency compensation (test-mode only) | `sync-engine.js` |
-
-### Key Tuning Knobs (`sync-config.js`)
+## Configurable Knobs (`sync-config.js`)
 
 | Constant | Default | Description |
-|----------|---------|-------------|
-| `CLOCK_SYNC_SAMPLES` | 15 | Rolling window size for NTP offset estimation |
-| `CLOCK_SYNC_OUTLIER_TRIM` | 0.2 | Fraction of highest-RTT samples to discard (20%) |
-| `CLOCK_SYNC_EMA_ALPHA` | 0.15 | EMA smoothing factor for clock offset (lower = more stable, slower) |
-| `DRIFT_IGNORE_MS` | 40 | Deadband: ignore drift smaller than this (ms) |
-| `DRIFT_SOFT_MS` | 120 | Upper bound for soft (rate) correction zone (ms) |
-| `DRIFT_HARD_RESYNC_MS` | 200 | Threshold for hard resync (seek) (ms) |
-| `PLL_HORIZON_SEC` | 4 | Correction horizon: spread correction over this many seconds |
-| `MAX_RATE_DELTA_STABLE` | 0.01 | Max playback rate change on stable network (±1%) |
-| `MAX_RATE_DELTA_UNSTABLE` | 0.02 | Max playback rate change on unstable network (±2%) |
-| `PLAYBACK_RATE_SMOOTH_ALPHA` | 0.2 | EMA smoothing for rate changes |
-| `HARD_RESYNC_COOLDOWN_MS` | 15000 | Minimum time between hard resyncs (15s) |
-| `AUDIO_LATENCY_COMP_MAX_MS` | 80 | Max learned audio latency compensation (test-mode only) |
+|---|---|---|
+| `CLOCK_SYNC_SAMPLES` | 15 | NTP rolling window size |
+| `CLOCK_SYNC_OUTLIER_TRIM` | 0.2 | Fraction of highest-RTT samples to discard |
+| `CLOCK_SYNC_EMA_ALPHA` | 0.15 | EMA smoothing factor for clock offset |
+| `DRIFT_IGNORE_MS` | 40 | Dead-band – drift below this is ignored |
+| `DRIFT_SOFT_MS` | 120 | Soft correction range upper bound |
+| `DRIFT_HARD_RESYNC_MS` | 200 | Threshold for hard seek resync |
+| `PLL_HORIZON_SEC` | 4 | Time horizon for rate correction |
+| `MAX_RATE_DELTA_STABLE` | 0.01 | Max rate change on stable network (±1%) |
+| `MAX_RATE_DELTA_UNSTABLE` | 0.02 | Max rate change on unstable network (±2%) |
+| `PLAYBACK_RATE_SMOOTH_ALPHA` | 0.2 | EMA alpha for rate changes |
+| `HARD_RESYNC_COOLDOWN_MS` | 15000 | Min time between hard resyncs per client |
+| `SYNC_TEST_MODE` | false | Enable test metrics, auto-load test audio |
 
 ---
 
-## SYNC_TEST_MODE
+## Running the Automated Harness
 
-Enable test mode by setting the environment variable:
-
-```bash
-SYNC_TEST_MODE=true node server.js
-```
-
-When enabled:
-- Structured JSON metrics are logged to stdout per correction/resync
-- `GET /api/sync/metrics?partyId=<code>` is available for real-time metric polling
-- Per-device audio latency compensation is activated
-
-**⚠️ Do NOT enable in production.** Gate with `process.env.SYNC_TEST_MODE === 'true'`.
-
----
-
-## Automated Harness (Playwright)
-
-### Run the harness
+### Prerequisites
 
 ```bash
-# Start the server in test mode first (requires Redis or NODE_ENV=test):
-SYNC_TEST_MODE=true npm run test:e2e -- --grep "Sync Metrics"
+# Install dependencies
+npm install
 
-# Or via the e2e runner directly:
-SYNC_TEST_MODE=true node scripts/e2e-runner.js --grep "sync-metrics"
+# Start the server locally
+SYNC_TEST_MODE=true npm run dev
 ```
 
-This runs:
-1. **1-device baseline** (`e2e-tests/sync-metrics.spec.js`) — 30s collection
-2. **2-device comparison** — 45s collection
+### 1-device and 2-device baseline
 
-Artifacts are written to:
-- `artifacts/sync/1-device.json`
-- `artifacts/sync/2-device.json`
+```bash
+# Standard harness (60s / 90s runs)
+SYNC_TEST_MODE=true npm run test:e2e
 
-### Summarize results
+# Artifacts are saved to:
+#   artifacts/sync/1-device.json
+#   artifacts/sync/2-device.json
+```
+
+### Long run (5–10 minutes, for stability analysis)
+
+```bash
+SYNC_TEST_MODE=true SYNC_LONGTEST=true npm run sync:longtest
+```
+
+### View summary of results
 
 ```bash
 node scripts/sync-summarize.js
-# or for machine-readable output:
+
+# Machine-readable output:
 node scripts/sync-summarize.js --json
 ```
 
-### Long run (optional, for detailed drift distribution)
+---
 
-```bash
-npm run sync:longtest
+## Metrics Endpoint
+
+When `SYNC_TEST_MODE=true` is set (or outside production), a metrics snapshot is available:
+
+```
+GET /api/sync/metrics?partyId=PARTY_CODE
 ```
 
-Runs a 10-minute 2-device test and saves extended drift distribution data.
+Response shape:
+
+```json
+{
+  "partyId": "ABC123",
+  "serverTimeMs": 1700000000000,
+  "totalClients": 2,
+  "party": {
+    "driftP50Ms": 5.2,
+    "driftP95Ms": 28.4,
+    "maxDriftMs": 55.1
+  },
+  "clients": [
+    {
+      "clientId": "...",
+      "clockQuality": "good",
+      "clockOffsetMs": -12.3,
+      "clockOffsetStddev": 4.1,
+      "rttMedianMs": 45.0,
+      "rttP95Ms": 72.0,
+      "networkStability": 0.93,
+      "lastDriftMs": 15.0,
+      "driftP50Ms": 8.0,
+      "driftP95Ms": 22.0,
+      "playbackRate": 1.002,
+      "correctionCount": 12,
+      "rateChangesPerMin": 4,
+      "hardResyncCount": 0,
+      "audioLatencyCompMs": 0,
+      "joinTime": 1700000000000
+    }
+  ]
+}
+```
 
 ---
 
 ## Testing on Real Phones
 
-### Prerequisites
+### Setup
 
-- Both phones on the **same Wi-Fi network** (or hotspot)
-- Server running and accessible from phones (note the IP, e.g. `192.168.1.100:8080`)
-- SYNC_TEST_MODE enabled on the server
-- A test audio file available at `/test-audio.wav` (included in `public/`)
+1. Both phones must be on the **same Wi-Fi network** as the server.
+2. Start the server with `SYNC_TEST_MODE=true npm run dev` (or `npm start`).
+3. Note the server's LAN IP (e.g. `192.168.1.100:8080`).
 
-### Steps
+### 1-phone test
 
-#### 1. Start the server in test mode
+1. Open `http://192.168.1.100:8080` on Phone 1.
+2. Sign up / log in.
+3. Tap **Start Party** → note the party code.
+4. Tap **Add Track** → select or paste the test audio URL (`/test-audio.wav`).
+5. Tap **Play** to start playback.
+6. Poll the metrics endpoint from any browser:
+   ```
+   http://192.168.1.100:8080/api/sync/metrics?partyId=YOUR_CODE
+   ```
+7. Watch `driftP95Ms` drop over 30–60 seconds as the clock sync stabilizes.
+8. **Good result**: `driftP95Ms < 50ms` after 60 seconds.
 
-```bash
-SYNC_TEST_MODE=true node server.js
-# Note the IP address shown in the startup output
-```
+### 2-phone test
 
-#### 2. Phone 1 — Create a party
+1. Follow steps 1–5 above for Phone 1 (host).
+2. Open `http://192.168.1.100:8080` on Phone 2 (guest).
+3. Sign in / join as guest using the party code from Phone 1.
+4. Both phones should now be playing the same audio.
+5. Poll metrics — you'll see 2 entries in `clients[]`.
+6. Watch for:
+   - `driftP95Ms < 80ms` after 60 seconds warm-up.
+   - `hardResyncCount` stays at 0–1.
+   - `rateChangesPerMin` stays under 20.
 
-1. Open `http://<server-ip>:8080` in Chrome/Safari on Phone 1
-2. Sign up or log in
-3. Tap **Create Party**
-4. Note the party code shown (e.g. `AB12CD`)
-5. Tap the audio URL field and enter: `http://<server-ip>:8080/test-audio.wav`
-6. Tap **Start Party / Play**
+### What to look for
 
-#### 3. Phone 2 — Join the party
+| Metric | Green | Yellow | Red |
+|---|---|---|---|
+| `driftP95Ms` (after 60s) | < 50ms | 50–120ms | > 120ms |
+| `hardResyncCount` (per 5min) | 0–1 | 2–3 | > 3 |
+| `rateChangesPerMin` | < 10 | 10–30 | > 30 |
+| `clockQuality` | excellent/good | fair | poor |
+| `rttP95Ms` | < 80ms | 80–200ms | > 200ms |
 
-1. Open `http://<server-ip>:8080` on Phone 2
-2. Enter the party code from Phone 1
-3. Tap **Join Party**
-4. Audio should begin playing in sync within a few seconds
+### Interpreting poor results
 
-#### 4. Collect metrics
-
-While both phones are playing, open a browser tab (on a laptop or Phone 1) and visit:
-
-```
-http://<server-ip>:8080/api/sync/metrics?partyId=<party-code>
-```
-
-Refresh every 5–10 seconds to observe:
-- `driftP95Ms` — should stabilize below 120ms after ~30s
-- `totalHardResyncCount` — should be 0 or 1 in normal conditions
-- `clients[*].correctionCount` — correction rate (typically 1–5/minute is good)
-- `clients[*].rttMedianMs` — round-trip latency (< 20ms on local Wi-Fi is excellent)
-
-#### 5. What to look for
-
-| Metric | Target | Warning |
-|--------|--------|---------|
-| `driftP95Ms` (after 30s) | < 120ms | > 200ms |
-| `totalHardResyncCount` | 0–1 | > 3 |
-| `clients[*].rttMedianMs` | < 30ms | > 80ms |
-| `clients[*].networkStability` | > 0.7 | < 0.5 |
-| `clients[*].clockOffsetStdDev` | < 10ms | > 30ms |
-
-#### 6. Duration
-
-Run for at least **2 minutes**. The first 30 seconds are the "warm-up" period where the clock converges. Drift p95 typically drops significantly after 30–60 seconds.
+- **High drift + high RTT**: Network is congested. Try moving closer to the router.
+- **Oscillating playbackRate**: PLL is hunting. Lower `PLAYBACK_RATE_SMOOTH_ALPHA` (e.g. 0.1) or increase `DRIFT_IGNORE_MS`.
+- **Frequent hard resyncs**: Clock offset estimation is poor. Check if `clockQuality` is 'poor'. May need better Wi-Fi.
+- **Clock quality 'poor'**: RTT variance is high. The EMA will take longer to converge. Wait 2–3 minutes before judging.
 
 ---
 
-## Interpreting Results
+## How the PLL Works (Brief)
 
-### Good sync (after stabilization)
-```
-driftP95Ms:     45ms  ✅
-maxDriftMs:     89ms
-hardResyncs:    0
-corrections:    12
-rttMedian:      8ms
-```
-
-### Needs tuning
-```
-driftP95Ms:     250ms  ⚠️
-maxDriftMs:     520ms
-hardResyncs:    3
-corrections:    47
-rttMedian:      42ms
-```
-
-If drift p95 is high:
-1. Lower `DRIFT_IGNORE_MS` to 20ms (triggers corrections sooner)
-2. Lower `DRIFT_HARD_RESYNC_MS` to 150ms (resync sooner)
-3. Check `rttMedianMs` — if > 50ms, the Wi-Fi path has high latency; increase `PLL_HORIZON_SEC` to 6
-
-If correction rate is too high (> 10/minute):
-1. Increase `DRIFT_IGNORE_MS` to 60ms (larger deadband)
-2. Increase `HARD_RESYNC_COOLDOWN_MS` to 20000ms
+1. Client reports `audioElement.currentTime` every 100ms.
+2. Server computes `expectedPosition = (now - trackStart) / 1000`.
+3. `drift = (reportedPosition - expectedPosition) * 1000` (ms).
+4. If `|drift| < 40ms`: do nothing.
+5. If `40 ≤ |drift| < 200ms`: adjust `playbackRate` by `-(drift_sec / 4s)`, capped at ±1–2%.
+6. If `|drift| ≥ 200ms`: hard seek to `expectedPosition` (if cooldown allows).
+7. Client receives `DRIFT_CORRECTION { mode, rateDelta, seekToSec }`.
 
 ---
 
-## Test Audio
+## Test Audio File
 
-A 10-second 440Hz sine wave is included at `public/test-audio.wav`.  
-It's served at `http://<server>/test-audio.wav` without CORS restrictions (same-origin).
+A 10-second 440Hz sine wave WAV is included at `public/test-audio.wav`.  
+It is served as a static file at `/test-audio.wav`.
 
-To use a different audio file for testing, place it in `public/` and reference it by URL.
-
----
-
-## Comparing Before/After
-
-```bash
-# Before upgrade: copy existing artifacts
-cp artifacts/sync/1-device.json artifacts/sync/1-device-baseline.json
-
-# Run new upgrade and save
-# (re-run the harness after changes)
-node scripts/sync-summarize.js
-```
-
-The summary script reads all `*.json` files in `artifacts/sync/` and prints them side-by-side.
+To use a longer file, replace `public/test-audio.wav` with any WAV file.
