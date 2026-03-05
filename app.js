@@ -220,7 +220,9 @@ function setView(viewName, opts = {}) {
       if (focusTarget) {
         focusTarget.focus({ preventScroll: false });
         const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        focusTarget.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+        if (typeof focusTarget.scrollIntoView === 'function') {
+          focusTarget.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+        }
       }
     }, 50);
   }
