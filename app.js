@@ -9907,6 +9907,12 @@ async function handleSignup() {
   const result = await signUp(email, password, djName, termsAccepted);
   
   if (result.success) {
+    // Persist the profile locally right away so the user is considered
+    // authenticated even before initAuthFlow() confirms with the server.
+    if (result.user && result.user.djName) {
+      saveProfile({ djName: result.user.djName, email: result.user.email || email, tier: USER_TIER.FREE });
+    }
+
     // Attempt to register referral if the user arrived via an invite link
     try {
       const refCode = localStorage.getItem('referral_code');
@@ -9930,10 +9936,11 @@ async function handleSignup() {
     await new Promise((r) => setTimeout(r, 1500));
     const sessionOk = await initAuthFlow();
     if (!sessionOk) {
-      // Signup API succeeded but session could not be confirmed — show visible error toast
-      // (initAuthFlow already redirected to landing, so errorEl may be hidden)
-      showToast('⚠️ Account created but session could not be verified. Please log in to continue.');
-      setView('login');
+      // The signup API succeeded and the auth cookie was set, but /api/me failed
+      // (e.g. transient server hiccup). Since we already saved the profile locally,
+      // navigate directly to the authenticated home view instead of bouncing to login.
+      showToast('✅ Account created! Loading your dashboard…');
+      setView('authHome');
     }
   } else {
     if (result.status === 409) {

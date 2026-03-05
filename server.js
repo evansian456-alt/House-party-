@@ -1446,8 +1446,17 @@ const uploadLimiter = shouldBypassRateLimit()
  * Create new user account
  */
 app.post("/api/auth/signup", authLimiter, async (req, res) => {
+  let dbClient = null;
   try {
+    if (!req.body || typeof req.body !== 'object') {
+      return res.status(400).json({ error: 'Invalid request: JSON body required' });
+    }
     const { email, password, djName, termsAccepted } = req.body;
+
+    // Validate input types before calling string methods
+    if (typeof email !== 'string' || typeof password !== 'string' || typeof djName !== 'string') {
+      return res.status(400).json({ error: 'Invalid request: email, password, and djName must be strings' });
+    }
 
     // Validate input
     if (!authMiddleware.isValidEmail(email)) {
@@ -1479,8 +1488,14 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
     // Hash password
     const passwordHash = await authMiddleware.hashPassword(password);
 
+    // Use a transaction so that user + dj_profile are created atomically.
+    // If the dj_profiles INSERT fails the users INSERT is rolled back,
+    // preventing orphaned user records that would block future signup attempts.
+    dbClient = await db.getClient();
+    await dbClient.query('BEGIN');
+
     // Create user — set profile_completed immediately since djName is collected at signup
-    const result = await db.query(
+    const result = await dbClient.query(
       `INSERT INTO users (email, password_hash, dj_name, profile_completed, terms_accepted_at)
        VALUES ($1, $2, $3, TRUE, NOW())
        RETURNING id, email, dj_name, created_at`,
@@ -1490,11 +1505,15 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
     const user = result.rows[0];
 
     // Create DJ profile for user
-    await db.query(
+    await dbClient.query(
       `INSERT INTO dj_profiles (user_id, dj_score, dj_rank)
        VALUES ($1, 0, 'Bedroom DJ')`,
       [user.id]
     );
+
+    await dbClient.query('COMMIT');
+    dbClient.release();
+    dbClient = null;
 
     // Generate JWT token
     const token = authMiddleware.generateToken({
@@ -1517,10 +1536,19 @@ app.post("/api/auth/signup", authLimiter, async (req, res) => {
         id: user.id,
         email: user.email,
         djName: user.dj_name,
+        profileCompleted: true,
         createdAt: user.created_at
       }
     });
   } catch (error) {
+    // Roll back the transaction on any error to avoid partial state
+    if (dbClient) {
+      try { await dbClient.query('ROLLBACK'); } catch (rollbackErr) {
+        console.error('[Auth] Signup transaction rollback failed:', rollbackErr.message);
+      }
+      dbClient.release();
+      dbClient = null;
+    }
     console.error('[Auth] Signup error:', error.code || error.message);
     // 23505 = Postgres unique-constraint violation (race condition: two concurrent signups)
     if (error.code === '23505') {
