@@ -297,11 +297,11 @@
 
       <!-- Two Giant Neon Buttons -->
       <div class="start-join-buttons">
-        <button class="btn-giant btn-create-party" id="btnPartyShowCreateParty">
+        <button class="btn-giant btn-create-party" id="btnPartyShowCreateParty" data-testid="create-party">
           <span class="btn-giant-icon">🎧</span>
           <span class="btn-giant-text">CREATE PARTY</span>
         </button>
-        <button class="btn-giant btn-join-party" id="btnPartyShowJoinParty">
+        <button class="btn-giant btn-join-party" id="btnPartyShowJoinParty" data-testid="join-party">
           <span class="btn-giant-icon">🎵</span>
           <span class="btn-giant-text">JOIN PARTY</span>
         </button>
@@ -313,7 +313,7 @@
           <label for="partyHostName">Your DJ Name</label>
           <input id="partyHostName" class="input" placeholder="DJ CoolVibes" required />
         </div>
-        <button type="button" class="btn primary" id="btnPartyCreate">🎉 Start the party</button>
+        <button type="button" class="btn primary" id="btnPartyCreate" data-testid="start-party-auth-home">🎉 Start the party</button>
         <div class="party-status hidden" id="partyCreateStatus">
           <div class="status-message" id="partyCreateStatusMessage">Waiting...</div>
         </div>
@@ -330,7 +330,7 @@
           <label for="partyGuestName">Your Name (optional)</label>
           <input id="partyGuestName" class="input" placeholder="Leave blank for 'Guest'" />
         </div>
-        <button class="btn primary" id="btnPartyJoin">🎵 Join the vibe</button>
+        <button class="btn primary" id="btnPartyJoin" data-testid="join-party-submit-auth-home">🎵 Join the vibe</button>
         <div class="party-status hidden" id="partyJoinStatus">
           <div class="status-message" id="partyJoinStatusMessage">Waiting...</div>
         </div>
