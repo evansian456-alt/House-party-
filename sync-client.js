@@ -36,6 +36,13 @@ const {
   TEST_AUDIO_PATH,
 } = require('./sync-config');
 
+// Load psychoacoustic masking helpers (browser: attached to window; Node: required)
+const _PsychoacousticMaskingSync = (typeof PsychoacousticMasking !== 'undefined')
+  ? PsychoacousticMasking
+  : (() => {
+    try { return require('./psychoacoustic-masking').PsychoacousticMasking; } catch (_) { return null; }
+  })();
+
 // ============================================================
 // Monotonic clock (client-side)
 // ============================================================
@@ -437,6 +444,12 @@ class ClientSyncEngine {
     // Play audio
     this.audioElement.play().then(() => {
       console.log('[Sync] Playback started successfully');
+
+      // Technique 1 — Soft-Start Ramp:
+      // Ramp volume from 0 → 1 over ~100ms to mask tiny inter-device start differences.
+      if (_PsychoacousticMaskingSync) {
+        _PsychoacousticMaskingSync.softStartRamp(this.audioElement);
+      }
       
       // Start feedback loop
       this.startPlaybackFeedbackLoop();
@@ -519,11 +532,24 @@ class ClientSyncEngine {
       // Clamp seek target to valid range
       const duration = this.audioElement.duration || Infinity;
       const clamped = Math.max(0, Math.min(seekTarget, duration > 0.25 ? duration - 0.25 : 0));
-      this.audioElement.currentTime = clamped;
-      this.playbackRate = 1.0;
-      this.audioElement.playbackRate = 1.0;
-      if (this.videoElement) this.videoElement.playbackRate = 1.0;
-      if (this.onDriftCorrection) this.onDriftCorrection(drift, 1.0);
+
+      // Technique 2 — Micro-Fade During Seek Correction:
+      // Fade volume briefly around the seek to prevent audible pop artifacts.
+      const _applySeekAndReset = () => {
+        this.playbackRate = 1.0;
+        this.audioElement.playbackRate = 1.0;
+        if (this.videoElement) this.videoElement.playbackRate = 1.0;
+        if (this.onDriftCorrection) this.onDriftCorrection(drift, 1.0);
+      };
+
+      if (_PsychoacousticMaskingSync) {
+        _PsychoacousticMaskingSync.seekWithMicroFade(this.audioElement, clamped, {
+          onComplete: _applySeekAndReset,
+        });
+      } else {
+        this.audioElement.currentTime = clamped;
+        _applySeekAndReset();
+      }
       return;
     }
 
