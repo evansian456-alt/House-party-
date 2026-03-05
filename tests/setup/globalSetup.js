@@ -121,7 +121,7 @@ module.exports = async function globalSetup() {
     redisContainer = await new RedisContainer('redis:7-alpine').start();
     REDIS_URL = `redis://${redisContainer.getHost()}:${redisContainer.getMappedPort(6379)}`;
     process.env.REDIS_URL = REDIS_URL;
-    console.log(`[globalSetup] Redis ready: ${REDIS_URL}`);
+    console.log(`[globalSetup] Redis ready: ${redactUrl(REDIS_URL)}`);
   }
 
   // ── 5. Run DB migrations ───────────────────────────────────────────────
