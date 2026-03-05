@@ -7289,6 +7289,84 @@ async function handleBillingReturn() {
     showLanding();
   };
 
+  // Account creation form handlers (viewAccountCreation)
+  const btnCreateAccountSubmit = document.getElementById('btnCreateAccountSubmit');
+  if (btnCreateAccountSubmit) {
+    btnCreateAccountSubmit.addEventListener('click', async () => {
+      const djName = (document.getElementById('accountDjName')?.value || '').trim();
+      const email = (document.getElementById('accountEmail')?.value || '').trim();
+      const password = document.getElementById('accountPassword')?.value || '';
+      const termsCheckbox = document.getElementById('accountTermsAccept');
+      const termsAccepted = termsCheckbox ? termsCheckbox.checked : false;
+      const errorEl = document.getElementById('accountCreationError');
+
+      if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+      }
+
+      if (!djName) {
+        if (errorEl) { errorEl.textContent = 'DJ Name is required'; errorEl.classList.remove('hidden'); }
+        return;
+      }
+
+      if (!email) {
+        if (errorEl) { errorEl.textContent = 'Email is required'; errorEl.classList.remove('hidden'); }
+        return;
+      }
+
+      if (!password) {
+        if (errorEl) { errorEl.textContent = 'Password is required'; errorEl.classList.remove('hidden'); }
+        return;
+      }
+
+      if (!termsAccepted) {
+        if (errorEl) { errorEl.textContent = 'You must accept the Terms & Conditions and Privacy Policy to create an account'; errorEl.classList.remove('hidden'); }
+        return;
+      }
+
+      btnCreateAccountSubmit.disabled = true;
+      btnCreateAccountSubmit.textContent = 'Creating account…';
+
+      const result = await signUp(email, password, djName, termsAccepted);
+
+      btnCreateAccountSubmit.disabled = false;
+      btnCreateAccountSubmit.textContent = 'Save Profile & Continue 🚀';
+
+      if (result.success) {
+        if (result.user && result.user.djName) {
+          saveProfile({ djName: result.user.djName, email: result.user.email || email, tier: USER_TIER.FREE });
+        }
+        const sessionOk = await initAuthFlow();
+        if (!sessionOk) {
+          showToast('✅ Account created! Loading your dashboard…');
+          setView('authHome');
+        }
+      } else {
+        if (errorEl) {
+          errorEl.textContent = result.error || `Signup failed (status ${result.status || 'unknown'})`;
+          errorEl.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  const btnShowLogin = document.getElementById('btnShowLogin');
+  if (btnShowLogin) {
+    btnShowLogin.addEventListener('click', () => {
+      console.log('[UI] Show login from account creation');
+      setView('login');
+    });
+  }
+
+  const btnBackToTiers = document.getElementById('btnBackToTiers');
+  if (btnBackToTiers) {
+    btnBackToTiers.addEventListener('click', () => {
+      console.log('[UI] Back to tier selection from account creation');
+      showChooseTier();
+    });
+  }
+
   // Payment screen handlers
   el("btnCompletePayment").onclick = () => {
     console.log("[UI] Party Pass payment completed (demo)");
