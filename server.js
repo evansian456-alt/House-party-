@@ -1373,23 +1373,33 @@ const authLimiter = (process.env.NODE_ENV === 'test' || process.env.DISABLE_RATE
     });
 
 // Rate limiter for general API endpoints
+// Skip in test/CI mode to prevent E2E test suites from exhausting the per-IP budget
+// (many tests call /api/me repeatedly from the same loopback address).
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 30, // Limit each IP to 30 requests per minute
-  message: 'Too many requests, please try again later',
+  message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  // Bypass in test/CI mode so E2E tests don't exhaust the per-IP budget
+  skip: () => process.env.NODE_ENV === 'test' || process.env.DISABLE_RATE_LIMIT === 'true',
+  handler(req, res, next, options) {
+    res.status(options.statusCode).json(options.message);
+  },
 });
 
 // Rate limiter for purchase endpoints
 const purchaseLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 10, // Limit each IP to 10 requests per minute
-  message: 'Too many purchase requests, please try again later',
+  message: { error: 'Too many purchase requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
   // Disable in test mode so integration tests can issue multiple payment requests
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: () => process.env.NODE_ENV === 'test' || process.env.DISABLE_RATE_LIMIT === 'true',
+  handler(req, res, next, options) {
+    res.status(options.statusCode).json(options.message);
+  },
 });
 
 // Rate limiter for party creation (security: prevent abuse)
