@@ -9,6 +9,7 @@
  * - Hard correction using seek (for large drift)
  * - Automatic monitoring every 2-5 seconds
  * - Mobile/background recovery
+ * - Psychoacoustic masking (micro-fade on seek, transient guard, rate nudge)
  * 
  * Thresholds:
  * - < 100ms: Ignore (acceptable sync)
@@ -20,6 +21,13 @@
  * - Applies gradual corrections to avoid jarring playback changes
  * - Returns to normal playbackRate once synced
  */
+
+// Load psychoacoustic masking helpers (browser: attached to window; Node: required)
+const _PsychoacousticMasking = (typeof PsychoacousticMasking !== 'undefined')
+  ? PsychoacousticMasking
+  : (() => {
+    try { return require('./psychoacoustic-masking').PsychoacousticMasking; } catch (_) { return null; }
+  })();
 
 class DriftController {
   constructor(audioElement, timeSync) {
@@ -35,6 +43,10 @@ class DriftController {
     this.trackStartServerMs = 0;
     this.trackStartPositionSec = 0;
     this.isPlaying = false;
+
+    // Psychoacoustic masking: wall-clock time when the current track started
+    // (used by the transient guard to avoid corrections in the first 300ms)
+    this.trackStartWallMs = 0;
     
     // Drift history for analysis
     this.driftHistory = []; // Array of { timestamp, driftMs, correctionType }
@@ -89,6 +101,7 @@ class DriftController {
     this.trackStartServerMs = startServerMs;
     this.trackStartPositionSec = startPositionSec;
     this.isPlaying = true;
+    this.trackStartWallMs = Date.now(); // record wall-clock start for transient guard
     
     if (this.isMonitoring) {
       if (this.debug) {
@@ -143,7 +156,19 @@ class DriftController {
     if (!this.audioElement || !this.isPlaying) {
       return;
     }
-    
+
+    // Technique 3 — Transient-Aware Resync:
+    // Skip corrections during the first 300ms of playback (musical attack period).
+    if (
+      _PsychoacousticMasking &&
+      _PsychoacousticMasking.isInTransientPeriod(this.trackStartWallMs)
+    ) {
+      if (this.debug) {
+        console.log('[DriftController] Skipping correction — transient guard active');
+      }
+      return;
+    }
+
     this.metrics.totalChecks++;
     
     // Calculate expected position based on server time
@@ -226,9 +251,30 @@ class DriftController {
    */
   _applySoftCorrection(driftSec) {
     if (!this.audioElement) return;
-    
+
+    const driftMs = driftSec * 1000;
+
+    // Technique 4 — Micro Playback-Rate Nudge:
+    // For very small drift (< 120ms), use a gentle rate nudge rather than a
+    // larger rate adjustment, so the correction is imperceptible.
+    if (
+      _PsychoacousticMasking &&
+      _PsychoacousticMasking.applyMicroRateNudge(this.audioElement, driftMs)
+    ) {
+      this.lastCorrectionType = 'soft';
+      this.lastCorrectionTime = Date.now();
+      if (this.debug) {
+        console.log('[DriftController] Micro rate nudge applied:', {
+          drift: driftMs.toFixed(2) + 'ms',
+        });
+      }
+      if (this.onCorrectionApplied) this.onCorrectionApplied('soft', true);
+      return;
+    }
+
+    // Fallback: standard playback-rate correction for larger soft-range drift
     // If ahead, slow down; if behind, speed up
-    let targetRate = driftSec > 0 
+    let targetRate = driftSec > 0
       ? this.playbackRateConfig.slow   // ahead: slow down
       : this.playbackRateConfig.fast;  // behind: speed up
     
@@ -271,31 +317,42 @@ class DriftController {
       }
       return;
     }
-    
-    try {
-      const beforeSec = this.audioElement.currentTime;
-      this.audioElement.currentTime = expectedPositionSec;
-      this.lastCorrectionType = 'hard';
-      this.lastCorrectionTime = Date.now();
-      
-      // Reset playback rate to normal after hard correction
-      this.audioElement.playbackRate = this.playbackRateConfig.normal;
-      
-      if (this.debug) {
-        console.log('[DriftController] Hard correction:', {
-          from: beforeSec.toFixed(2) + 's',
-          to: expectedPositionSec.toFixed(2) + 's',
-          jump: ((expectedPositionSec - beforeSec) * 1000).toFixed(2) + 'ms'
-        });
-      }
-      
-      if (this.onCorrectionApplied) {
-        this.onCorrectionApplied('hard', true);
-      }
-    } catch (err) {
-      console.error('[DriftController] Hard correction failed:', err);
-      if (this.onCorrectionApplied) {
-        this.onCorrectionApplied('hard', false);
+
+    const beforeSec = this.audioElement.currentTime;
+    this.lastCorrectionType = 'hard';
+    this.lastCorrectionTime = Date.now();
+
+    if (this.debug) {
+      console.log('[DriftController] Hard correction (micro-fade):', {
+        from: beforeSec.toFixed(2) + 's',
+        to: expectedPositionSec.toFixed(2) + 's',
+        jump: ((expectedPositionSec - beforeSec) * 1000).toFixed(2) + 'ms',
+      });
+    }
+
+    // Technique 2 — Micro-Fade During Seek Correction:
+    // Briefly reduce volume, seek, then restore — prevents audible pop artifacts.
+    if (_PsychoacousticMasking) {
+      _PsychoacousticMasking.seekWithMicroFade(
+        this.audioElement,
+        expectedPositionSec,
+        {
+          onComplete: () => {
+            // Reset playback rate to normal after the fade cycle completes
+            this.audioElement.playbackRate = this.playbackRateConfig.normal;
+            if (this.onCorrectionApplied) this.onCorrectionApplied('hard', true);
+          },
+        }
+      );
+    } else {
+      // Fallback: plain seek without fade
+      try {
+        this.audioElement.currentTime = expectedPositionSec;
+        this.audioElement.playbackRate = this.playbackRateConfig.normal;
+        if (this.onCorrectionApplied) this.onCorrectionApplied('hard', true);
+      } catch (err) {
+        console.error('[DriftController] Hard correction failed:', err);
+        if (this.onCorrectionApplied) this.onCorrectionApplied('hard', false);
       }
     }
   }
@@ -358,4 +415,12 @@ class DriftController {
       correctionSuccessRate: 0
     };
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.DriftController = DriftController;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { DriftController };
 }
