@@ -3856,6 +3856,7 @@ app.post("/api/join-party", async (req, res) => {
     
     // Respond with success and guest info
     const response = { 
+      success: true,
       ok: true,
       guestId,
       nickname: guestNickname,
@@ -4218,12 +4219,12 @@ app.post("/api/leave-party", async (req, res) => {
 });
 
 // POST /api/end-party - End party early (host only)
-app.post("/api/end-party", async (req, res) => {
+app.post("/api/end-party", apiLimiter, async (req, res) => {
   const timestamp = new Date().toISOString();
   console.log(`[HTTP] POST /api/end-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
   
   try {
-    const { partyCode } = req.body;
+    const { partyCode, hostId } = req.body;
     
     if (!partyCode) {
       return res.status(400).json({ error: "Party code is required" });
@@ -4264,6 +4265,13 @@ app.post("/api/end-party", async (req, res) => {
     
     if (!partyData) {
       return res.status(404).json({ error: "Party not found or expired" });
+    }
+    
+    // Validate host authority — only the party host may end the party
+    const authCheck = validateHostAuth(hostId, partyData);
+    if (!authCheck.valid) {
+      console.log(`[end-party] Unauthorized end attempt for ${code}: ${authCheck.error}`);
+      return res.status(403).json({ error: authCheck.error });
     }
     
     // Mark party as ended
@@ -4308,7 +4316,7 @@ app.post("/api/end-party", async (req, res) => {
       parties.delete(code);
     }
     
-    res.json({ ok: true });
+    res.json({ success: true });
     
   } catch (error) {
     console.error(`[HTTP] Error ending party, instanceId: ${INSTANCE_ID}:`, error);
