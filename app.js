@@ -7853,7 +7853,8 @@ async function handleBillingReturn() {
               "Content-Type": "application/json"
             },
             body: JSON.stringify({
-              partyCode: state.code
+              partyCode: state.code,
+              hostId: state.hostId
             })
           });
           
