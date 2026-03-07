@@ -3085,7 +3085,7 @@ async function getPartyFromRedis(code) {
     if (!data) return null;
     return JSON.parse(data);
   } catch (err) {
-    console.error(`[Redis] Error getting party ${code}:`, err.message);
+    console.error('[Redis] Error getting party %s:', code, err.message);
     throw err;
   }
 }
@@ -3099,7 +3099,7 @@ async function setPartyInRedis(code, partyData) {
     await redis.setex(`${PARTY_KEY_PREFIX}${code}`, PARTY_TTL_SECONDS, data);
     return true;
   } catch (err) {
-    console.error(`[Redis] Error setting party ${code}:`, err.message);
+    console.error('[Redis] Error setting party %s:', code, err.message);
     throw err;
   }
 }
@@ -3112,7 +3112,7 @@ async function deletePartyFromRedis(code) {
     await redis.del(`${PARTY_KEY_PREFIX}${code}`);
     return true;
   } catch (err) {
-    console.error(`[Redis] Error deleting party ${code}:`, err.message);
+    console.error('[Redis] Error deleting party %s:', code, err.message);
     throw err;
   }
 }
@@ -4334,7 +4334,7 @@ app.post("/api/end-party", apiLimiter, async (req, res) => {
     try {
       await persistPartyScoreboard(code, partyData);
     } catch (err) {
-      console.error(`[end-party] Failed to persist scoreboard for ${code}:`, err.message);
+      console.error('[end-party] Failed to persist scoreboard for %s:', code, err.message);
     }
     
     // Save updated party data (or delete it)
@@ -6967,7 +6967,7 @@ async function persistPartyScoreboard(partyCode, party) {
     console.log(`[Database] Updated ${guestScores.length} guest profiles`);
     
   } catch (error) {
-    console.error(`[Database] Error persisting scoreboard for party ${partyCode}:`, error.message);
+    console.error('[Database] Error persisting scoreboard for party %s:', partyCode, error.message);
     throw error;
   }
 }
@@ -8301,7 +8301,7 @@ function handleDisconnect(ws) {
     
     // Persist scoreboard to database
     persistPartyScoreboard(partyCode, party).catch(err => {
-      console.error(`[Database] Error persisting scoreboard for party ${partyCode}:`, err.message);
+      console.error('[Database] Error persisting scoreboard for party %s:', partyCode, err.message);
     });
     
     // Clear timeout warning timer
@@ -8336,7 +8336,7 @@ function handleDisconnect(ws) {
     
     // Delete from Redis
     deletePartyFromRedis(partyCode).catch(err => {
-      console.error(`[Redis] Error deleting party ${partyCode}:`, err.message);
+      console.error('[Redis] Error deleting party %s:', partyCode, err.message);
     });
   } else {
     // Regular member left
