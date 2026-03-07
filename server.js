@@ -1765,6 +1765,11 @@ app.get("/api/me", apiLimiter, authMiddleware.requireAuth, async (req, res) => {
         createdAt: user.created_at,
         profileCompleted: user.profile_completed || false
       },
+      // Top-level shortcuts (some e2e tests read these directly off the response root)
+      id: user.id,
+      email: user.email,
+      djName: user.dj_name,
+      profileCompleted: user.profile_completed || false,
       isAdmin,
       tier,
       effectiveTier,
