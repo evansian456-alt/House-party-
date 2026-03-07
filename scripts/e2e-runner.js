@@ -255,7 +255,7 @@ async function startPostgresViaDocker() {
   const pgPort = 15432; // use a non-standard port to avoid conflicts
   const pgUser = 'e2e';
   const pgPassword = 'e2e_pass';
-  const pgDb = 'houseparty_e2e';
+  const pgDb = 'phoneparty_e2e';
 
   console.log(`[E2E] Starting Postgres via Docker (container: ${name}, port: ${pgPort})…`);
   execSync(

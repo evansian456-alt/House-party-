@@ -2,7 +2,7 @@
 
 ## Overview
 
-Successfully implemented a comprehensive end-to-end test suite for the SyncSpeaker/House Party application using Playwright. The suite consists of 88 test cases organized into 11 modular test files covering all application functionality.
+Successfully implemented a comprehensive end-to-end test suite for the SyncSpeaker/Phone Party application using Playwright. The suite consists of 88 test cases organized into 11 modular test files covering all application functionality.
 
 ## Test Suite Structure
 

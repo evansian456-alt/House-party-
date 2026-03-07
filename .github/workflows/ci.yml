@@ -32,7 +32,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: houseparty_test
+          POSTGRES_DB: phoneparty_test
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 10s
@@ -41,7 +41,7 @@ jobs:
 
     env:
       NODE_ENV: test
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/houseparty_test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/phoneparty_test
       JWT_SECRET: test-ci-secret-not-used-in-production
       REDIS_URL: redis://localhost:6379
       ALLOW_LOCAL_DISK_IN_PROD: "true"

@@ -102,7 +102,7 @@ For a comprehensive explanation of how the multi-device synchronization works, s
 ### Technical Documentation
 - **[SYNCSPEAKER_AMPSYNC_DOCS.md](SYNCSPEAKER_AMPSYNC_DOCS.md)** - AmpSync+ technical documentation
 - **[AMPSYNC_QUICK_REF.md](AMPSYNC_QUICK_REF.md)** - Quick reference guide
-- **[docs/guides/HOUSE_PARTY_SYNC_README.md](docs/guides/HOUSE_PARTY_SYNC_README.md)** - User guide for sync system
+- **[docs/guides/PHONE_PARTY_SYNC_README.md](docs/guides/PHONE_PARTY_SYNC_README.md)** - User guide for sync system
 
 ## 📶 Important Information
 
@@ -789,7 +789,7 @@ Install the Capacitor CLI and platform dependencies:
 
 ```bash
 npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios
-npx cap init "Phone Party" com.houseparty.syncspeaker --web-dir public
+npx cap init "Phone Party" com.phoneparty.syncspeaker --web-dir public
 ```
 
 > The `capacitor.config.json` at the repo root is already pre-filled with the correct `appId`, `appName`, and `webDir`.

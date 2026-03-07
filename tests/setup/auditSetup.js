@@ -83,7 +83,7 @@ module.exports = async function auditSetup() {
   // 1. PostgreSQL
   console.log('[auditSetup] Starting PostgreSQL container…');
   const pgContainer = await new PostgreSqlContainer('postgres:16-alpine')
-    .withDatabase('houseparty_audit')
+    .withDatabase('phoneparty_audit')
     .withUsername('audituser')
     .withPassword('auditpass')
     .start();

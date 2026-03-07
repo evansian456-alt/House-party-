@@ -1,8 +1,8 @@
-# House Party - Ultra-Precise Multi-Device Sync System Testing Guide
+# Phone Party - Ultra-Precise Multi-Device Sync System Testing Guide
 
 ## Overview
 
-This guide provides step-by-step instructions for testing the House Party ultra-precise multi-device audio/video synchronization system. The system surpasses AmpSync with <20ms precision, advanced drift correction, network jitter simulation, and comprehensive monitoring.
+This guide provides step-by-step instructions for testing the Phone Party ultra-precise multi-device audio/video synchronization system. The system surpasses AmpSync with <20ms precision, advanced drift correction, network jitter simulation, and comprehensive monitoring.
 
 ## Prerequisites
 
@@ -488,6 +488,6 @@ jobs:
 
 ## Conclusion
 
-This testing guide covers comprehensive testing of the House Party ultra-precise multi-device sync system. Follow the scenarios and monitor the metrics to ensure optimal performance. The system is designed to maintain <20ms sync accuracy across multiple devices even under challenging network conditions.
+This testing guide covers comprehensive testing of the Phone Party ultra-precise multi-device sync system. Follow the scenarios and monitor the metrics to ensure optimal performance. The system is designed to maintain <20ms sync accuracy across multiple devices even under challenging network conditions.
 
 For issues or questions, refer to the main documentation in `SYNCSPEAKER_AMPSYNC_DOCS.md` or open an issue on the GitHub repository.

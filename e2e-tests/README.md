@@ -2,7 +2,7 @@
 
 ## Overview
 
-This directory contains a comprehensive end-to-end test suite for the SyncSpeaker/House Party application. The tests are organized by feature area to ensure maintainability and CI/CD readiness.
+This directory contains a comprehensive end-to-end test suite for the SyncSpeaker/Phone Party application. The tests are organized by feature area to ensure maintainability and CI/CD readiness.
 
 ## 🎯 New: Comprehensive User Journey Testing
 

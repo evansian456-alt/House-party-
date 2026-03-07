@@ -14,10 +14,10 @@ const PRODUCTS = {
       priceId: process.env.STRIPE_PRICE_ID_PARTY_PASS || 'price_1T730tK3GhmyOKSB36mifw84'
     },
     apple: {
-      productId: 'com.houseparty.partypass'
+      productId: 'com.phoneparty.partypass'
     },
     google: {
-      productId: 'com.houseparty.partypass'
+      productId: 'com.phoneparty.partypass'
     },
     entitlement: {
       tier: 'PARTY_PASS'
@@ -30,10 +30,10 @@ const PRODUCTS = {
       priceId: process.env.STRIPE_PRICE_ID_PRO_MONTHLY || 'price_1T733rK3GhmyOKSBsghjQPUZ'
     },
     apple: {
-      productId: 'com.houseparty.pro.monthly'
+      productId: 'com.phoneparty.pro.monthly'
     },
     google: {
-      productId: 'com.houseparty.pro.monthly'
+      productId: 'com.phoneparty.pro.monthly'
     },
     entitlement: {
       tier: 'PRO'

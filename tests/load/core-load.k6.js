@@ -1,5 +1,5 @@
 /**
- * Safe load test for House Party
+ * Safe load test for Phone Party
  *
  * Tests: login, join party, create party, basket add/remove, checkout session creation.
  *

@@ -1,5 +1,5 @@
 /**
- * Stress and Network Jitter Tests for House Party Sync System
+ * Stress and Network Jitter Tests for Phone Party Sync System
  * 
  * Tests network jitter simulation, stress scenarios, and error recovery
  */

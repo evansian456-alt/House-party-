@@ -1,7 +1,7 @@
 # GBP Pricing Update - Implementation Summary
 
 ## Overview
-This document summarizes the complete update of all pricing in the House Party / SyncSpeaker application to use GBP (£) currency consistently.
+This document summarizes the complete update of all pricing in the Phone Party / SyncSpeaker application to use GBP (£) currency consistently.
 
 ## Requirements Fulfilled ✅
 

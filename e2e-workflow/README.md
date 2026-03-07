@@ -1,6 +1,6 @@
 # E2E Automated Testing Workflow
 
-Complete automated workflow for the SyncSpeaker/House Party app that runs E2E tests, detects failures, suggests fixes, and provides detailed reports.
+Complete automated workflow for the SyncSpeaker/Phone Party app that runs E2E tests, detects failures, suggests fixes, and provides detailed reports.
 
 ## 🎯 Features
 

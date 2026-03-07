@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-This document summarizes the implementation of the complete automated E2E testing workflow for the SyncSpeaker/House Party application.
+This document summarizes the implementation of the complete automated E2E testing workflow for the SyncSpeaker/Phone Party application.
 
 ## ✅ Implementation Status
 

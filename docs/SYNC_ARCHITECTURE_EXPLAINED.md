@@ -1,4 +1,4 @@
-# SyncSpeaker / House Party Sync Architecture - Complete Explanation
+# SyncSpeaker / Phone Party Sync Architecture - Complete Explanation
 
 **Last Updated:** 2026-02-09  
 **System Version:** AmpSync+ v1.0  
@@ -18,7 +18,7 @@
 
 ## 1. Current Sync Architecture
 
-The SyncSpeaker/House Party app uses a **master-slave synchronization architecture** where the host device acts as the authoritative clock and playback controller, and all guest devices synchronize their playback to match the host's timeline.
+The SyncSpeaker/Phone Party app uses a **master-slave synchronization architecture** where the host device acts as the authoritative clock and playback controller, and all guest devices synchronize their playback to match the host's timeline.
 
 ### 1.1 How the Host Controls Playback
 

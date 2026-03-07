@@ -1,9 +1,9 @@
-# House Party - Ultra-Precise Multi-Device Sync System
+# Phone Party - Ultra-Precise Multi-Device Sync System
 ## Quick Start Guide
 
 ## 🎯 What This Is
 
-The House Party Ultra-Precise Multi-Device Sync System enables multiple devices to play audio and video in perfect synchronization with **<20ms accuracy**. Whether you're hosting a silent disco, multi-room party, or just want perfectly synced playback across devices, this system delivers professional-grade synchronization.
+The Phone Party Ultra-Precise Multi-Device Sync System enables multiple devices to play audio and video in perfect synchronization with **<20ms accuracy**. Whether you're hosting a silent disco, multi-room party, or just want perfectly synced playback across devices, this system delivers professional-grade synchronization.
 
 ## ✨ Key Features
 
@@ -131,11 +131,11 @@ The dashboard includes network simulation tools:
 
 ### For Developers
 - **SYNCSPEAKER_AMPSYNC_DOCS.md** - Complete technical documentation
-- **HOUSE_PARTY_SYNC_IMPLEMENTATION.md** - Implementation details
+- **PHONE_PARTY_SYNC_IMPLEMENTATION.md** - Implementation details
 - **AMPSYNC_QUICK_REF.md** - API quick reference
 
 ### For Security/DevOps
-- **SECURITY_SUMMARY_HOUSE_PARTY_SYNC.md** - Security analysis
+- **SECURITY_SUMMARY_PHONE_PARTY_SYNC.md** - Security analysis
 
 ## 🔧 Advanced Configuration
 
@@ -275,7 +275,7 @@ The dashboard provides deep insights into sync quality, making it easy to diagno
 **Contributing:**
 - Found a bug? Open an issue on GitHub
 - Have an enhancement? Submit a pull request
-- Security concern? See `SECURITY_SUMMARY_HOUSE_PARTY_SYNC.md`
+- Security concern? See `SECURITY_SUMMARY_PHONE_PARTY_SYNC.md`
 
 ## 📜 License
 

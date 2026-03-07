@@ -82,13 +82,13 @@ describe('billing/products.js', () => {
   });
 
   test('getProductByPlatformId finds Apple product', () => {
-    const p = getProductByPlatformId('apple', 'com.houseparty.partypass');
+    const p = getProductByPlatformId('apple', 'com.phoneparty.partypass');
     expect(p).not.toBeNull();
     expect(p.key).toBe('party_pass');
   });
 
   test('getProductByPlatformId finds Google product', () => {
-    const p = getProductByPlatformId('google', 'com.houseparty.pro.monthly');
+    const p = getProductByPlatformId('google', 'com.phoneparty.pro.monthly');
     expect(p).not.toBeNull();
     expect(p.key).toBe('pro_monthly');
   });

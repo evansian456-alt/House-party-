@@ -44,7 +44,7 @@ module.exports = async function stressGlobalSetup() {
     console.log('[stressSetup] Starting PostgreSQL container…');
     const { PostgreSqlContainer } = require('@testcontainers/postgresql');
     pgContainer = await new PostgreSqlContainer('postgres:16-alpine')
-      .withDatabase('houseparty_stress')
+      .withDatabase('phoneparty_stress')
       .withUsername('stressuser')
       .withPassword('stresspass')
       .start();

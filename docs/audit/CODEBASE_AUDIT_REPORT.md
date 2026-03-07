@@ -1,4 +1,4 @@
-# House Party / SyncSpeaker - Codebase Audit Report
+# Phone Party / SyncSpeaker - Codebase Audit Report
 
 **Date:** February 9, 2026  
 **Auditor:** AI Code Audit System  
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This audit analyzed the entire House Party / SyncSpeaker codebase for:
+This audit analyzed the entire Phone Party / SyncSpeaker codebase for:
 - Unused code and files
 - Duplicate code patterns
 - Dependency optimization

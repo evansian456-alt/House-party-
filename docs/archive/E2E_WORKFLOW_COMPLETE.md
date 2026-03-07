@@ -2,7 +2,7 @@
 
 ## ✅ Implementation Complete
 
-The complete automated E2E testing workflow for SyncSpeaker/House Party has been successfully implemented and is ready to use!
+The complete automated E2E testing workflow for SyncSpeaker/Phone Party has been successfully implemented and is ready to use!
 
 ---
 

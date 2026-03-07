@@ -8,7 +8,7 @@
 
 ## Overview
 
-This document summarizes the security analysis conducted during the review of all 7 open pull requests in the House Party / SyncSpeaker repository.
+This document summarizes the security analysis conducted during the review of all 7 open pull requests in the Phone Party / SyncSpeaker repository.
 
 ---
 

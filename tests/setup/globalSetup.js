@@ -75,7 +75,7 @@ module.exports = async function globalSetup() {
   // ── 3. Start PostgreSQL container ─────────────────────────────────────
   console.log('[globalSetup] Starting PostgreSQL container…');
   const pgContainer = await new PostgreSqlContainer('postgres:16-alpine')
-    .withDatabase('houseparty_test')
+    .withDatabase('phoneparty_test')
     .withUsername('testuser')
     .withPassword('testpass')
     .start();

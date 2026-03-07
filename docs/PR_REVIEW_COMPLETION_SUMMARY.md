@@ -1,6 +1,6 @@
 # PR Review Task - COMPLETION SUMMARY
 
-**Task:** Review all open pull requests in the House Party / SyncSpeaker repository  
+**Task:** Review all open pull requests in the Phone Party / SyncSpeaker repository  
 **Status:** ✅ **COMPLETE**  
 **Date:** February 9, 2026
 

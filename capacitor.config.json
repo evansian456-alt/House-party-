@@ -1,5 +1,5 @@
 {
-  "appId": "com.houseparty.syncspeaker",
+  "appId": "com.phoneparty.syncspeaker",
   "appName": "Phone Party",
   "webDir": ".",
   "plugins": {

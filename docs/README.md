@@ -38,7 +38,7 @@ The following documents in the root directory are the current active documentati
 
 ## Sync System Documentation
 
-- **`SYNC_ARCHITECTURE_EXPLAINED.md`** - Comprehensive explanation of how the House Party / SyncSpeaker app keeps all devices in sync
+- **`SYNC_ARCHITECTURE_EXPLAINED.md`** - Comprehensive explanation of how the Phone Party / SyncSpeaker app keeps all devices in sync
   - Current sync architecture (host control, state broadcasting, guest adjustment, queue/reactions sync)
   - Drift handling (detection, correction strategies, thresholds)
   - Role-based behavior (host vs guest permissions)

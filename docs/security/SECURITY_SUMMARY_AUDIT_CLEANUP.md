@@ -1,7 +1,7 @@
 # Codebase Cleanup - Security Summary
 
 **Date:** February 9, 2026  
-**Scope:** Complete audit and cleanup of House Party / SyncSpeaker codebase
+**Scope:** Complete audit and cleanup of Phone Party / SyncSpeaker codebase
 
 ---
 
