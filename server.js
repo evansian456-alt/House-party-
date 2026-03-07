@@ -5094,6 +5094,38 @@ app.post("/api/party/:code/reorder-queue", async (req, res) => {
   }
 });
 
+// POST /api/party/:code/chat-mode - Update chat mode for a party (HOST-ONLY)
+app.post("/api/party/:code/chat-mode", apiLimiter, authMiddleware.requireAuth, async (req, res) => {
+  const code = req.params.code ? req.params.code.toUpperCase().trim() : null;
+  const { mode, hostId } = req.body;
+
+  if (!code) return res.status(400).json({ error: 'Party code is required' });
+  if (!mode || !['OPEN', 'EMOJI_ONLY', 'LOCKED'].includes(mode)) {
+    return res.status(400).json({ error: 'Invalid chat mode. Must be OPEN, EMOJI_ONLY, or LOCKED' });
+  }
+  if (!hostId) return res.status(400).json({ error: 'hostId is required' });
+
+  try {
+    const partyData = await getPartyFromRedis(code);
+    if (!partyData) {
+      const localParty = parties.get(code);
+      if (!localParty) return res.status(404).json({ error: 'Party not found' });
+      if (localParty.hostId !== hostId) return res.status(403).json({ error: 'Not authorized' });
+      localParty.chatMode = mode;
+      return res.json({ success: true, chatMode: mode });
+    }
+    if (partyData.hostId !== hostId) return res.status(403).json({ error: 'Not authorized' });
+    partyData.chatMode = mode;
+    await setPartyInRedis(code, partyData);
+    const localParty = parties.get(code);
+    if (localParty) localParty.chatMode = mode;
+    return res.json({ success: true, chatMode: mode });
+  } catch (err) {
+    console.error('[chat-mode] Error updating chat mode for %s:', code, err.message);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/party/:code/members - Get party members for polling
 app.get("/api/party/:code/members", async (req, res) => {
   const timestamp = new Date().toISOString();

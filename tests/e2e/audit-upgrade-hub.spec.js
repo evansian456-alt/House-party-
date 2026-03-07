@@ -86,7 +86,7 @@ test.describe('Choose tier screen', () => {
 test.describe('Upgrade hub', () => {
   let u;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     u = makeUser('upgradehub');
     await request.post(`${BASE}/api/auth/signup`, { data: { email: u.email, password: u.password, djName: u.djName, termsAccepted: true } });
     await request.post(`${BASE}/api/auth/login`, { data: { email: u.email, password: u.password } });

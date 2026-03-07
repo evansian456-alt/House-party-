@@ -32,7 +32,7 @@ test.describe('Guest party flow', () => {
   let partyCode;
   let hostDjName;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     // Create a host and a party
     const host = makeUser('host_for_guest');
     await request.post(`${BASE}/api/auth/signup`, {
@@ -96,7 +96,7 @@ test.describe('Guest party flow', () => {
 
     // Leave
     const leaveRes = await request.post(`${BASE}/api/leave-party`, {
-      data: { code: partyCode, guestId },
+      data: { partyCode, guestId },
     });
     expect(leaveRes.ok()).toBeTruthy();
     const body = await leaveRes.json();

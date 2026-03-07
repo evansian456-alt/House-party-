@@ -102,7 +102,7 @@ test.describe('Chat UI in party view', () => {
 
   test('chat input accepts text input', async ({ page }) => {
     await page.goto(BASE);
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('networkidle');
 
     // Reveal the chat container
     await page.evaluate(() => {

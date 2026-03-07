@@ -126,7 +126,7 @@ test.describe('Host music controls — UI', () => {
 test.describe('Host music controls — API', () => {
   let host, code, hostId;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     host = makeUser('musicapi');
     await request.post(`${BASE}/api/auth/signup`, { data: { email: host.email, password: host.password, djName: host.djName, termsAccepted: true } });
     await request.post(`${BASE}/api/auth/login`, { data: { email: host.email, password: host.password } });
@@ -222,7 +222,7 @@ test.describe('Host music controls — API', () => {
 test.describe('Sync accuracy', () => {
   let syncCode;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     const h = makeUser('syncaudit');
     await request.post(`${BASE}/api/auth/signup`, { data: { email: h.email, password: h.password, djName: h.djName, termsAccepted: true } });
     await request.post(`${BASE}/api/auth/login`, { data: { email: h.email, password: h.password } });
@@ -255,11 +255,11 @@ test.describe('Sync accuracy', () => {
     }
   });
 
-  test('guest sees same track and startAtServerMs as host', async ({ request }) => {
+  test('guest sees same track and startAtServerMs as host', async ({ request, playwright }) => {
     const state = await (await request.get(`${BASE}/api/party-state?code=${syncCode}`)).json();
 
-    // Join as guest (new context)
-    const guestCtx = await request.newContext();
+    // Join as guest (new context - unauthenticated)
+    const guestCtx = await playwright.request.newContext({ baseURL: BASE });
     const guestState = await (await guestCtx.get(`${BASE}/api/party-state?code=${syncCode}`)).json();
 
     if (state.currentTrack && guestState.currentTrack) {

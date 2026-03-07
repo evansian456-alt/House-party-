@@ -322,7 +322,7 @@ test.describe('Guest join and leave', () => {
     const guestId = joinBody2.guestId;
 
     const leaveRes = await request.post(`${BASE}/api/leave-party`, {
-      data: { code, guestId },
+      data: { partyCode: code, guestId },
     });
     expect([200, 201, 404]).toContain(leaveRes.status());
   });

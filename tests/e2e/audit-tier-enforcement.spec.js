@@ -195,7 +195,7 @@ test.describe('PARTY_PASS tier enforcement (test mode)', () => {
 test.describe('Chat mode enforcement', () => {
   let code, hostId, guestId;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     const host = makeUser('chatmode');
     await request.post(`${BASE}/api/auth/signup`, { data: { email: host.email, password: host.password, djName: host.djName, termsAccepted: true } });
     await request.post(`${BASE}/api/auth/login`, { data: { email: host.email, password: host.password } });

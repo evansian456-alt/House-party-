@@ -37,7 +37,7 @@ const TEST_PRICE_PRO = process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthl
 test.describe('Basket — add / remove', () => {
   let user;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     user = makeUser();
     await signupAndLogin(request, user);
   });
@@ -59,11 +59,13 @@ test.describe('Basket — add / remove', () => {
   });
 
   test('basket contents match after add — UI state consistency', async ({ request }) => {
+    // Ensure item is in basket (self-contained — don't rely on previous test state)
+    await request.post(`${BASE}/api/basket/add`, { data: { priceId: TEST_PRICE_ID } });
+
     // Backend state
     const backendRes = await request.get(`${BASE}/api/basket`);
     const backendBody = await backendRes.json();
 
-    // The basket should still contain the item added in the previous test
     expect(backendBody.basket).toContain(TEST_PRICE_ID);
   });
 
@@ -108,7 +110,7 @@ test.describe('Basket — add / remove', () => {
 test.describe('Basket — checkout session', () => {
   let user;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     user = makeUser('checkout');
     await signupAndLogin(request, user);
   });

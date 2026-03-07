@@ -38,7 +38,7 @@ async function apiLogin(request, user) {
 test.describe('Host party flow', () => {
   let host;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     host = makeUser('host');
     await apiSignup(request, host);
     await apiLogin(request, host);
@@ -53,12 +53,12 @@ test.describe('Host party flow', () => {
     expect(body).toHaveProperty('code');
     expect(typeof body.code).toBe('string');
     expect(body.code.length).toBeGreaterThan(0);
-    host.partyCode = body.code;
   });
 
   test('created party is retrievable via GET /api/party', async ({ request }) => {
-    if (!host.partyCode) test.skip();
-    const res = await request.get(`${BASE}/api/party?code=${host.partyCode}`);
+    const createRes = await request.post(`${BASE}/api/create-party`, { data: { djName: host.djName } });
+    const { code } = await createRes.json();
+    const res = await request.get(`${BASE}/api/party?code=${code}`);
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
     expect(body.exists).toBe(true);
@@ -110,14 +110,15 @@ test.describe('Host party flow', () => {
     if (process.env.NODE_ENV !== 'test') return;
 
     const meRes = await request.get(`${BASE}/api/me`);
-    const { user } = await meRes.json();
+    const body = await meRes.json();
+    const userId = body.id || body.userId;
 
     const webhookRes = await request.post(`${BASE}/api/test/stripe/simulate-webhook`, {
       data: {
         type: 'checkout.session.completed',
         data: {
-          metadata: { userId: user.id, priceId: process.env.STRIPE_PRICE_PARTY_PASS || 'price_party_pass_test' },
-          client_reference_id: user.id,
+          metadata: { userId, priceId: process.env.STRIPE_PRICE_PARTY_PASS || 'price_party_pass_test' },
+          client_reference_id: userId,
         },
       },
     });
@@ -128,14 +129,15 @@ test.describe('Host party flow', () => {
     if (process.env.NODE_ENV !== 'test') return;
 
     const meRes = await request.get(`${BASE}/api/me`);
-    const { user } = await meRes.json();
+    const body = await meRes.json();
+    const userId = body.id || body.userId;
 
     const webhookRes = await request.post(`${BASE}/api/test/stripe/simulate-webhook`, {
       data: {
         type: 'checkout.session.completed',
         data: {
-          metadata: { userId: user.id, priceId: process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthly_test' },
-          client_reference_id: user.id,
+          metadata: { userId, priceId: process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthly_test' },
+          client_reference_id: userId,
         },
       },
     });

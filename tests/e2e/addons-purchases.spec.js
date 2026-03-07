@@ -142,7 +142,7 @@ test.describe('Store catalog — information accuracy', () => {
 test.describe('Add-on purchases — visual pack', () => {
   let user;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     user = makeUser('visual');
     await signupAndLogin(request, user);
   });
@@ -216,7 +216,7 @@ test.describe('Add-on purchases — visual pack', () => {
 test.describe('Add-on purchases — profile upgrades', () => {
   let user;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     user = makeUser('profile');
     await signupAndLogin(request, user);
   });
@@ -269,7 +269,7 @@ test.describe('Add-on purchases — profile upgrades', () => {
 test.describe('Add-on UI state consistency', () => {
   let user;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     user = makeUser('uistate');
     await signupAndLogin(request, user);
   });
