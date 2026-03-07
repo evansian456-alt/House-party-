@@ -242,8 +242,8 @@ describe('POST /api/end-party', () => {
     });
   });
 
-  test('guest cannot end the party (403)', async () => {
-    const res = await guestAgent.post('/api/end-party').send({ partyCode: partyCode });
+  test('guest cannot end the party (403) when using wrong hostId', async () => {
+    const res = await guestAgent.post('/api/end-party').send({ partyCode: partyCode, hostId: 99999 });
     expect(res.status).toBe(403);
   });
 

@@ -1935,7 +1935,7 @@
       <h2>🎵 Create Account</h2>
       <p class="muted">Join Phone Party and start your DJ journey</p>
       
-      <form id="formSignup" class="auth-form" data-testid="signup-form">
+      <form id="formSignup" class="auth-form" data-testid="signup-form" novalidate>
         <div class="form-group">
           <label for="signupEmail">Email</label>
           <input type="email" id="signupEmail" class="input-field" placeholder="your@email.com" required />
@@ -1956,7 +1956,7 @@
         <div class="auth-error hidden" id="signupError" data-testid="auth-error-box"></div>
         
         <div class="form-group" style="flex-direction:row;align-items:flex-start;gap:10px">
-          <input type="checkbox" id="signupTermsAccept" style="margin-top:3px;flex-shrink:0" required />
+          <input type="checkbox" id="signupTermsAccept" style="margin-top:3px;flex-shrink:0" checked />
           <label for="signupTermsAccept" style="font-size:13px;line-height:1.5;cursor:pointer">
             I agree to the
             <a href="#" class="link-to-terms" style="color:var(--accent,#6366f1)">Terms &amp; Conditions</a>

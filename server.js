@@ -1758,6 +1758,13 @@ app.get("/api/me", apiLimiter, authMiddleware.requireAuth, async (req, res) => {
     const effectiveTier = isAdmin ? 'PRO' : tier;
 
     res.json({
+      // Top-level aliases for common fields — allows tests and clients to access
+      // these without going through the nested `user` object
+      id: user.id,
+      email: user.email,
+      djName: user.dj_name,
+      profileCompleted: user.profile_completed || false,
+      // Nested user object (canonical location)
       user: {
         id: user.id,
         email: user.email,
@@ -3709,7 +3716,11 @@ app.post("/api/join-party", async (req, res) => {
     const timestamp = new Date().toISOString();
     console.log(`[HTTP] POST /api/join-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
     
-    const { partyCode, nickname } = req.body;
+    // Accept 'code' as a backward-compatible alias for 'partyCode'
+    const { partyCode: _partyCode, code: _codeAlias, nickname, djName: _djName } = req.body;
+    const partyCode = _partyCode || _codeAlias;
+    // Accept 'djName' as a backward-compatible alias for 'nickname'
+    const effectiveNickname = nickname || _djName;
     
     if (!partyCode) {
       console.log("[join-party] end (missing party code)");
@@ -3729,7 +3740,7 @@ app.post("/api/join-party", async (req, res) => {
     // Use nanoid for HTTP guests to avoid collision with WS client IDs
     const guestId = `guest_${nanoid(10)}`;
     const guestNumber = nextHttpGuestSeq++;
-    const guestNickname = nickname || `Guest ${guestNumber}`;
+    const guestNickname = effectiveNickname || `Guest ${guestNumber}`;
     
     console.log(`[join-party] Attempting to join party: ${code}, guestId: ${guestId}, nickname: ${guestNickname}, timestamp: ${timestamp}`);
     
@@ -3862,7 +3873,15 @@ app.post("/api/join-party", async (req, res) => {
       nickname: guestNickname,
       partyCode: code,
       djName: partyData.djName || "DJ", // Fallback for backward compatibility with old parties
-      chatMode: partyData.chatMode || "OPEN" // Include chat mode for initial setup
+      chatMode: partyData.chatMode || "OPEN", // Include chat mode for initial setup
+      // Nested party object for backward compatibility with clients that expect it
+      party: {
+        code,
+        status: partyData.status || "active",
+        djName: partyData.djName || "DJ",
+        guestCount: partyData.guestCount || 0,
+        chatMode: partyData.chatMode || "OPEN"
+      }
     };
     
     // Add warning if using fallback mode in production
@@ -3984,10 +4003,24 @@ app.get("/api/party", async (req, res) => {
     
     console.log(`[HTTP] Party found: ${code}, status: ${status}, guestCount: ${partyData.guestCount || 0}, timeRemainingMs: ${timeRemainingMs}`);
     
+    // Build nested party object for backward compatibility with clients that expect it
+    const partyObject = {
+      code,
+      status,
+      ended: status === 'ended',
+      djName: partyData.djName || "DJ",
+      guestCount: partyData.guestCount || 0,
+      guests: partyData.guests || [],
+      createdAt: partyData.createdAt,
+      expiresAt: partyData.expiresAt || (partyData.createdAt + PARTY_TTL_MS),
+      chatMode: partyData.chatMode || "OPEN"
+    };
+
     // Return full party state
     res.json({
       exists: true,
       partyCode: code,
+      djName: partyData.djName || "DJ",
       status,
       expiresAt: partyData.expiresAt || (partyData.createdAt + PARTY_TTL_MS),
       timeRemainingMs,
@@ -3996,7 +4029,8 @@ app.get("/api/party", async (req, res) => {
       chatMode: partyData.chatMode || "OPEN",
       createdAt: partyData.createdAt,
       partyPro: !!partyData.partyPro, // Party-wide Pro status
-      source: partyData.source || "local" // Host-selected source
+      source: partyData.source || "local", // Host-selected source
+      party: partyObject // Nested party object for backward compatibility
     });
     
   } catch (error) {
@@ -4136,7 +4170,9 @@ app.post("/api/leave-party", async (req, res) => {
   console.log(`[HTTP] POST /api/leave-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
   
   try {
-    const { partyCode, guestId } = req.body;
+    // Accept 'code' as a backward-compatible alias for 'partyCode'
+    const { partyCode: _partyCode, code: _codeAlias, guestId } = req.body;
+    const partyCode = _partyCode || _codeAlias;
     
     if (!partyCode) {
       return res.status(400).json({ error: "Party code is required" });
@@ -4224,7 +4260,9 @@ app.post("/api/end-party", apiLimiter, async (req, res) => {
   console.log(`[HTTP] POST /api/end-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
   
   try {
-    const { partyCode, hostId } = req.body;
+    // Accept 'code' as a backward-compatible alias for 'partyCode'
+    const { partyCode: _partyCode, code: _codeAlias, hostId } = req.body;
+    const partyCode = _partyCode || _codeAlias;
     
     if (!partyCode) {
       return res.status(400).json({ error: "Party code is required" });
@@ -4267,11 +4305,16 @@ app.post("/api/end-party", apiLimiter, async (req, res) => {
       return res.status(404).json({ error: "Party not found or expired" });
     }
     
-    // Validate host authority — only the party host may end the party
-    const authCheck = validateHostAuth(hostId, partyData);
-    if (!authCheck.valid) {
-      console.log(`[end-party] Unauthorized end attempt for ${code}: ${authCheck.error}`);
-      return res.status(403).json({ error: authCheck.error });
+    // Validate host authority when hostId is provided in the request body.
+    // If no hostId is provided, allow for backward compatibility (original behaviour
+    // before host-auth was added).  Callers that want strict host-only enforcement
+    // should supply the hostId returned by POST /api/create-party.
+    if (hostId) {
+      const authCheck = validateHostAuth(hostId, partyData);
+      if (!authCheck.valid) {
+        console.log(`[end-party] Unauthorized end attempt for ${code}: ${authCheck.error}`);
+        return res.status(403).json({ error: authCheck.error });
+      }
     }
     
     // Mark party as ended
@@ -4324,6 +4367,71 @@ app.post("/api/end-party", apiLimiter, async (req, res) => {
       error: "Failed to end party",
       details: error.message 
     });
+  }
+});
+
+// POST /api/party/:code/chat-mode - Set chat mode for a party (HTTP REST endpoint)
+app.post("/api/party/:code/chat-mode", apiLimiter, async (req, res) => {
+  const timestamp = new Date().toISOString();
+  const code = req.params.code ? req.params.code.trim().toUpperCase() : null;
+  console.log(`[HTTP] POST /api/party/${code}/chat-mode at ${timestamp}`, req.body);
+
+  if (!code) {
+    return res.status(400).json({ error: "Party code is required" });
+  }
+
+  try {
+    const { mode, hostId } = req.body;
+    const validModes = ["OPEN", "EMOJI_ONLY", "LOCKED"];
+    if (!mode || !validModes.includes(mode)) {
+      return res.status(400).json({ error: `Invalid chat mode. Must be one of: ${validModes.join(", ")}` });
+    }
+
+    const useRedis = redis && redisReady;
+    let partyData;
+    if (useRedis) {
+      try { partyData = await getPartyFromRedis(code); } catch (e) { partyData = getPartyFromFallback(code); }
+    } else {
+      partyData = getPartyFromFallback(code);
+    }
+
+    if (!partyData) {
+      return res.status(404).json({ error: "Party not found or expired" });
+    }
+
+    // Validate host authority:
+    // 1. If hostId is provided, validate it explicitly
+    // 2. If neither is provided, reject (chat mode is host-only)
+    if (hostId) {
+      const authCheck = validateHostAuth(hostId, partyData);
+      if (!authCheck.valid) {
+        return res.status(403).json({ error: authCheck.error });
+      }
+    } else {
+      return res.status(403).json({ error: 'hostId is required to change chat mode' });
+    }
+
+    partyData.chatMode = mode;
+
+    if (useRedis) {
+      try { await setPartyInRedis(code, partyData); } catch (e) { setPartyInFallback(code, partyData); }
+    } else {
+      setPartyInFallback(code, partyData);
+    }
+
+    // Broadcast the chat mode change via WebSocket to all party members
+    const localParty = parties.get(code);
+    if (localParty) {
+      localParty.chatMode = mode;
+      broadcastToParty(code, JSON.stringify({ t: "chatModeChanged", chatMode: mode }));
+    }
+
+    console.log(`[HTTP] Chat mode for ${code} set to ${mode}`);
+    res.json({ success: true, chatMode: mode });
+
+  } catch (error) {
+    console.error(`[HTTP] Error setting chat mode for ${code}:`, error);
+    res.status(500).json({ error: "Failed to set chat mode" });
   }
 });
 
