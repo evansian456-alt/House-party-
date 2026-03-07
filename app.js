@@ -955,7 +955,7 @@ function setPlanPill() {
   } else if (state.partyPro) {
     pill.textContent = "Supporter · party unlocked";
   } else {
-    pill.textContent = "Free · up to 2 phones";
+    pill.textContent = "Free · up to 3 phones";
   }
 }
 
@@ -2596,7 +2596,7 @@ function updateSelectedTierDisplay() {
   
   if (state.selectedTier === USER_TIER.FREE) {
     tierBadge.textContent = "FREE MODE";
-    tierDetails.textContent = "2 phones · Unlimited time · Basic features";
+    tierDetails.textContent = "3 phones · Unlimited time · Basic features";
   } else if (state.selectedTier === USER_TIER.PARTY_PASS) {
     tierBadge.textContent = "PARTY PASS";
     tierDetails.textContent = "£3.99 · Up to 4 phones · 2 hours"; // GBP - Party Pass pricing
@@ -10529,7 +10529,7 @@ function updateTierDisplay() {
     [USER_TIER.PRO]: `Pro · ${PRO_LIMIT} phones`
   };
   
-  planPill.textContent = limits[state.userTier] || 'Free · 2 phones';
+  planPill.textContent = limits[state.userTier] || 'Free · 3 phones';
 }
 
 /**

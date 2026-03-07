@@ -95,8 +95,8 @@ const INSTANCE_ID = `server-${Math.random().toString(36).substring(2, 9)}`;
 const PROMO_CODES = ["SS-PARTY-A9K2", "SS-PARTY-QM7L", "SS-PARTY-Z8P3"];
 
 // Party capacity limits
-const FREE_PARTY_LIMIT = 2; // Free parties limited to 2 phones
-const FREE_DEFAULT_MAX_PHONES = 2; // Alias for clarity in new code
+const FREE_PARTY_LIMIT = 3; // Free parties limited to 3 phones (1 host + 2 guests)
+const FREE_DEFAULT_MAX_PHONES = 3; // Alias for clarity in new code
 const MAX_PRO_PARTY_DEVICES = 100; // Practical limit for Pro parties
 
 // Upgrade durations
@@ -1891,8 +1891,26 @@ app.get("/api/store", authMiddleware.optionalAuth, (req, res) => {
  * GET /api/tier-info
  * Get tier definitions and feature information (single source of truth)
  */
-app.get("/api/tier-info", (req, res) => {
+app.get("/api/tier-info", apiLimiter, authMiddleware.optionalAuth, async (req, res) => {
+  // Resolve current user's tier if authenticated
+  let tier = 'FREE';
+  let effectiveTier = 'FREE';
+  if (req.user && req.user.userId) {
+    try {
+      const upgrades = await db.getOrCreateUserUpgrades(req.user.userId);
+      const entitlements = db.resolveEntitlements(upgrades);
+      if (entitlements.hasPro) {
+        tier = 'PRO';
+        effectiveTier = 'PRO';
+      } else if (entitlements.hasPartyPass) {
+        tier = 'PARTY_PASS';
+        effectiveTier = 'PARTY_PASS';
+      }
+    } catch (e) { /* fall through to FREE */ }
+  }
   res.json({
+    tier,
+    effectiveTier,
     appName: "Phone Party",
     tiers: {
       FREE: {
@@ -1905,9 +1923,9 @@ app.get("/api/tier-info", (req, res) => {
         messageTtlMs: 0,
         maxTextLength: 0,
         queueLimit: 5,
-        phoneLimit: 2,
+        phoneLimit: 3,
         notes: [
-          "2 phones maximum",
+          "3 phones maximum",
           "No chat or messaging features",
           "Basic DJ controls only",
           "Unlimited party time"
@@ -3813,8 +3831,8 @@ app.post("/api/join-party", async (req, res) => {
     if (totalDevices >= maxAllowed) {
       console.log(`[join-party] Party limit reached: ${code}, current: ${totalDevices}, max: ${maxAllowed}`);
       return res.status(403).json({ 
-        error: `Party limit reached (${maxAllowed} ${maxAllowed === 2 ? 'phones' : 'devices'})`,
-        details: maxAllowed === 2 ? "Free parties are limited to 2 phones" : undefined
+        error: `Party limit reached (${maxAllowed} ${maxAllowed === 3 ? 'phones' : 'devices'})`,
+        details: maxAllowed === 3 ? "Free parties are limited to 3 phones" : undefined
       });
     }
     
@@ -5977,10 +5995,10 @@ app.delete('/api/basket/item/:priceId', apiLimiter, authMiddleware.requireAuth, 
 });
 
 app.post('/api/basket/checkout', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
-  if (!stripeClient) return res.status(503).json({ error: 'Billing not configured. STRIPE_SECRET_KEY is missing.' });
   const userId = req.user.userId;
   const basket = userBaskets.get(userId) || [];
   if (basket.length === 0) return res.status(400).json({ error: 'Basket is empty' });
+  if (!stripeClient) return res.status(503).json({ error: 'Billing not configured. STRIPE_SECRET_KEY is missing.' });
   const hasSubscription = basket.some(p => p === STRIPE_PRICE_PRO_MONTHLY);
   const mode = hasSubscription ? 'subscription' : 'payment';
   try {
@@ -8073,7 +8091,7 @@ async function handleJoin(ws, msg) {
       console.log(`[WS] Join blocked - Party limit reached, partyCode: ${code}, clientId: ${client.id}, current: ${currentMemberCount}, max: ${maxAllowed}`);
       safeSend(ws, JSON.stringify({ 
         t: "ERROR", 
-        message: maxAllowed === 2 ? "Free parties are limited to 2 phones" : `Party limit reached (${maxAllowed} devices)`
+        message: maxAllowed === 3 ? "Free parties are limited to 3 phones" : `Party limit reached (${maxAllowed} devices)`
       }));
       return;
     }

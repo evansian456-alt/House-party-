@@ -117,7 +117,7 @@ describe('Tier Enforcement', () => {
       
       expect(freeTier.chatEnabled).toBe(false);
       expect(freeTier.autoMessages).toBe(false);
-      expect(freeTier.phoneLimit).toBe(2);
+      expect(freeTier.phoneLimit).toBe(3);
     });
 
     it('should return correct Party Pass features', async () => {
@@ -165,7 +165,7 @@ describe('Tier Enforcement', () => {
     it('should include phone limits in tier info', async () => {
       const response = await request(app).get('/api/tier-info');
       
-      expect(response.body.tiers.FREE.phoneLimit).toBe(2);
+      expect(response.body.tiers.FREE.phoneLimit).toBe(3);
       expect(response.body.tiers.PARTY_PASS.phoneLimit).toBe(4);
       expect(response.body.tiers.PRO_MONTHLY.phoneLimit).toBe(10);
     });
