@@ -46,6 +46,7 @@ jobs:
       REDIS_URL: redis://localhost:6379
       ALLOW_LOCAL_DISK_IN_PROD: "true"
       PUBLIC_BASE_URL: http://localhost:3000
+      STREAMING_PARTY_ENABLED: "true"
 
     steps:
       - name: Checkout

@@ -3808,11 +3808,9 @@ app.post("/api/join-party", async (req, res) => {
     const maxAllowed = await getMaxAllowedPhones(code, normalizedPartyData);
     const currentGuestCount = normalizedPartyData.guestCount || 0;
     
-    // Count total devices (host + guests) - host counts as 1 device
-    const totalDevices = 1 + currentGuestCount;
-    
-    if (totalDevices >= maxAllowed) {
-      console.log(`[join-party] Party limit reached: ${code}, current: ${totalDevices}, max: ${maxAllowed}`);
+    // Count guests only (the limit represents max guests, consistent with WebSocket join logic)
+    if (currentGuestCount >= maxAllowed) {
+      console.log(`[join-party] Party limit reached: ${code}, current guests: ${currentGuestCount}, max: ${maxAllowed}`);
       return res.status(403).json({ 
         error: `Party limit reached (${maxAllowed} ${maxAllowed === 2 ? 'phones' : 'devices'})`,
         details: maxAllowed === 2 ? "Free parties are limited to 2 phones" : undefined
@@ -4168,7 +4166,8 @@ app.post("/api/leave-party", async (req, res) => {
   console.log(`[HTTP] POST /api/leave-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
   
   try {
-    const { partyCode, guestId } = req.body;
+    const { partyCode: _leavePartyCode, code: _leaveCode, guestId } = req.body;
+    const partyCode = _leavePartyCode || _leaveCode;
     
     if (!partyCode) {
       return res.status(400).json({ error: "Party code is required" });
@@ -4237,7 +4236,8 @@ app.post("/api/leave-party", async (req, res) => {
     }
     
     res.json({ 
-      ok: true, 
+      ok: true,
+      success: true,
       guestCount: partyData.guestCount 
     });
     
@@ -4362,6 +4362,70 @@ app.post("/api/end-party", apiLimiter, authMiddleware.optionalAuth, async (req, 
       error: "Failed to end party",
       details: error.message 
     });
+  }
+});
+
+// POST /api/party/:code/chat-mode — Set chat mode for a party (host only via hostId)
+app.post("/api/party/:code/chat-mode", apiLimiter, async (req, res) => {
+  const timestamp = new Date().toISOString();
+  const rawCode = req.params.code;
+  console.log(`[HTTP] POST /api/party/${rawCode}/chat-mode at ${timestamp}`, req.body);
+
+  try {
+    const { mode, hostId } = req.body;
+    const validModes = ['OPEN', 'EMOJI_ONLY', 'LOCKED'];
+    if (!mode || !validModes.includes(mode)) {
+      return res.status(400).json({ error: `Invalid mode. Must be one of: ${validModes.join(', ')}` });
+    }
+
+    const code = normalizePartyCode(rawCode);
+    if (code.length !== 6) {
+      return res.status(400).json({ error: "Party code must be 6 characters" });
+    }
+
+    const useRedis = redis && redisReady;
+    if (IS_PRODUCTION && !useRedis) {
+      return res.status(503).json({ error: "Server not ready - Redis unavailable" });
+    }
+
+    let partyData;
+    if (useRedis) {
+      try { partyData = await getPartyFromRedis(code); }
+      catch (e) { partyData = getPartyFromFallback(code); }
+    } else {
+      partyData = getPartyFromFallback(code);
+    }
+
+    if (!partyData) {
+      return res.status(404).json({ error: "Party not found or expired" });
+    }
+
+    // Verify host identity via hostId (body) if party has one, or accept any request
+    if (partyData.hostId !== undefined && hostId !== undefined) {
+      if (String(partyData.hostId) !== String(hostId)) {
+        return res.status(403).json({ error: "Only the party host can change chat mode" });
+      }
+    }
+
+    partyData.chatMode = mode;
+
+    if (useRedis) {
+      try { await setPartyInRedis(code, partyData); }
+      catch (e) { setPartyInFallback(code, partyData); }
+    } else {
+      setPartyInFallback(code, partyData);
+    }
+
+    // Update local in-memory party too
+    const localParty = parties.get(code);
+    if (localParty) {
+      localParty.chatMode = mode;
+    }
+
+    return res.json({ ok: true, chatMode: mode });
+  } catch (error) {
+    console.error(`[HTTP] Error setting chat mode:`, error);
+    return res.status(500).json({ error: "Failed to set chat mode", details: error.message });
   }
 });
 
@@ -5050,7 +5114,7 @@ app.post("/api/party/:code/clear-queue", async (req, res) => {
 app.post("/api/party/:code/reorder-queue", async (req, res) => {
   const timestamp = new Date().toISOString();
   const code = req.params.code ? req.params.code.toUpperCase() : null;
-  const { hostId, fromIndex, toIndex } = req.body;
+  const { hostId, fromIndex, toIndex, newOrder } = req.body;
   
   console.log(`[HTTP] POST /api/party/${code}/reorder-queue at ${timestamp}`);
   
@@ -5058,8 +5122,8 @@ app.post("/api/party/:code/reorder-queue", async (req, res) => {
     return res.status(400).json({ error: 'Invalid party code' });
   }
   
-  if (typeof fromIndex !== 'number' || typeof toIndex !== 'number') {
-    return res.status(400).json({ error: 'fromIndex and toIndex are required and must be numbers' });
+  if (!newOrder && (typeof fromIndex !== 'number' || typeof toIndex !== 'number')) {
+    return res.status(400).json({ error: 'Provide newOrder array or fromIndex+toIndex numbers' });
   }
   
   try {
@@ -5081,18 +5145,31 @@ app.post("/api/party/:code/reorder-queue", async (req, res) => {
       partyData.queue = [];
     }
     
-    // Validate indices
-    if (fromIndex < 0 || fromIndex >= partyData.queue.length) {
-      return res.status(400).json({ error: 'Invalid fromIndex' });
+    // Reorder: use newOrder array if provided, otherwise swap fromIndex/toIndex
+    if (newOrder && Array.isArray(newOrder)) {
+      // newOrder is an array of trackIds specifying the desired order
+      const ordered = [];
+      for (const trackId of newOrder) {
+        const track = partyData.queue.find(t => t.trackId === trackId);
+        if (track) ordered.push(track);
+      }
+      // Append any tracks not mentioned in newOrder (preserve unknown tracks at end)
+      for (const track of partyData.queue) {
+        if (!newOrder.includes(track.trackId)) ordered.push(track);
+      }
+      partyData.queue = ordered;
+    } else {
+      // Validate indices
+      if (fromIndex < 0 || fromIndex >= partyData.queue.length) {
+        return res.status(400).json({ error: 'Invalid fromIndex' });
+      }
+      if (toIndex < 0 || toIndex >= partyData.queue.length) {
+        return res.status(400).json({ error: 'Invalid toIndex' });
+      }
+      // Reorder: remove from fromIndex and insert at toIndex
+      const [movedTrack] = partyData.queue.splice(fromIndex, 1);
+      partyData.queue.splice(toIndex, 0, movedTrack);
     }
-    
-    if (toIndex < 0 || toIndex >= partyData.queue.length) {
-      return res.status(400).json({ error: 'Invalid toIndex' });
-    }
-    
-    // Reorder: remove from fromIndex and insert at toIndex
-    const [movedTrack] = partyData.queue.splice(fromIndex, 1);
-    partyData.queue.splice(toIndex, 0, movedTrack);
     
     // PHASE 3: Persist to storage
     await savePartyState(code, partyData);
@@ -5746,7 +5823,7 @@ app.post('/api/referral/track', apiLimiter, authMiddleware.requireAuth, async (r
  * Returns the list of supported streaming providers.
  * Requires: feature flag ON + Party Pass or Pro tier.
  */
-app.get('/api/streaming/providers', apiLimiter, requireStreamingEnabled, authMiddleware.requireAuth, requireStreamingEntitled, async (req, res) => {
+app.get('/api/streaming/providers', apiLimiter, authMiddleware.requireAuth, requireStreamingEntitled, requireStreamingEnabled, async (req, res) => {
   try {
     return res.json({
       providers: [
@@ -5790,7 +5867,7 @@ app.get('/api/streaming/providers', apiLimiter, requireStreamingEnabled, authMid
  *
  * Body: { partyCode, provider, trackId, title?, artist?, artwork? }
  */
-app.post('/api/streaming/select-track', apiLimiter, requireStreamingEnabled, authMiddleware.requireAuth, requireStreamingEntitled, async (req, res) => {
+app.post('/api/streaming/select-track', apiLimiter, authMiddleware.requireAuth, requireStreamingEntitled, requireStreamingEnabled, async (req, res) => {
   try {
     const { partyCode, provider, trackId, title, artist, artwork } = req.body;
 
@@ -5924,6 +6001,40 @@ app.post('/api/basket/checkout', apiLimiter, authMiddleware.requireAuth, async (
 // ============================================================================
 // STRIPE CHECKOUT SESSION ENDPOINT
 // ============================================================================
+
+// Alias: POST /api/create-checkout-session → /api/stripe/create-checkout-session
+// Accepts { tier } or { priceId, userId } for backward compat with e2e tests
+app.post('/api/create-checkout-session', apiLimiter, authMiddleware.optionalAuth, async (req, res) => {
+  if (!stripeClient) {
+    return res.status(503).json({ error: 'Billing not configured. STRIPE_SECRET_KEY is missing.' });
+  }
+  const { tier, priceId: bodyPriceId, userId: bodyUserId } = req.body;
+  // Resolve priceId from tier alias or direct priceId
+  let priceId = bodyPriceId;
+  if (!priceId && tier) {
+    if (tier === 'PARTY_PASS') priceId = STRIPE_PRICE_PARTY_PASS;
+    else if (tier === 'PRO' || tier === 'PRO_MONTHLY') priceId = STRIPE_PRICE_PRO_MONTHLY;
+  }
+  const userId = bodyUserId || (req.user && req.user.userId);
+  if (!priceId || !userId) {
+    return res.status(400).json({ error: 'priceId/tier and userId are required' });
+  }
+  try {
+    const hasSubscription = priceId === STRIPE_PRICE_PRO_MONTHLY;
+    const mode = hasSubscription ? 'subscription' : 'payment';
+    const session = await stripeClient.checkout.sessions.create({
+      mode,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: STRIPE_SUCCESS_URL,
+      cancel_url: STRIPE_CANCEL_URL,
+      metadata: { userId }
+    });
+    return res.json({ sessionId: session.id, url: session.url, checkoutUrl: session.url });
+  } catch (error) {
+    console.error('[CreateCheckout] Error:', error.message);
+    return res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
 
 /**
  * POST /api/stripe/create-checkout-session
