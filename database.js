@@ -33,6 +33,11 @@ pool.on('connect', () => {
 });
 
 pool.on('error', (err) => {
+  // 57P01 = "terminating connection due to administrator command" — emitted during
+  // Jest globalTeardown when the Postgres container is stopped. Silencing it here
+  // prevents the "Cannot log after tests are done" Jest error that would otherwise
+  // cause a non-zero exit code even when all tests pass.
+  if (err.code === '57P01') return;
   console.error('[Database] Unexpected error on idle client', err);
 });
 
