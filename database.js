@@ -33,6 +33,12 @@ pool.on('connect', () => {
 });
 
 pool.on('error', (err) => {
+  // In test environments the DB container is stopped during globalTeardown, which
+  // terminates idle pool connections with error code 57P01 ("terminating connection
+  // due to administrator command").  Logging this via console.error after Jest has
+  // already closed its test environment causes the "Cannot log after tests are done"
+  // failure.  Suppress expected teardown-time errors in the test environment.
+  if (process.env.NODE_ENV === 'test' && err.code === '57P01') return;
   console.error('[Database] Unexpected error on idle client', err);
 });
 
