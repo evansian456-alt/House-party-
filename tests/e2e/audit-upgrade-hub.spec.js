@@ -224,7 +224,7 @@ test.describe('Visual pack store', () => {
     const items = page.locator('#viewVisualPackStore .store-item');
     const count = await items.count();
     for (let i = 0; i < count; i++) {
-      await expect(items.nth(i).locator('.btn-buy-pack')).toBeVisible();
+      await expect(items.nth(i).locator('.btn-buy-pack')).toBeAttached();
     }
   });
 

@@ -256,7 +256,7 @@ test.describe('Click-Everything Audit', () => {
     if (await profileBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await profileBtn.click();
       // nav-settings opens viewMyProfile
-      await page.locator('#viewMyProfile, #viewProfile').first().waitFor({ state: 'visible', timeout: 8_000 });
+      await page.locator('#viewMyProfile').waitFor({ state: 'visible', timeout: 8_000 });
       await screenshot(page, 'profile_view');
       // Go back
       await page.goto(BASE);
@@ -275,6 +275,13 @@ test.describe('Click-Everything Audit', () => {
     // Create party via unified helper (handles viewAuthHome + viewHome)
     const partyCode = await createPartyInUI(page, user.djName);
     await screenshot(page, 'party_view_entered');
+
+    // Dismiss any modal (e.g. referral nudge) that may intercept clicks
+    const nudgeModal = page.locator('#modalReferralNudge');
+    if (await nudgeModal.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await page.keyboard.press('Escape');
+      await nudgeModal.waitFor({ state: 'hidden', timeout: 3_000 }).catch(() => {});
+    }
 
     // Get visible party control buttons
     const partyButtons = await clickAllVisible(page, '#viewParty');
@@ -360,7 +367,7 @@ test.describe('Click-Everything Audit', () => {
     await profileBtn.waitFor({ state: 'visible', timeout: 10_000 });
     await profileBtn.click();
     // nav-settings opens viewMyProfile (not viewProfile)
-    await page.locator('#viewMyProfile, #viewProfile').first().waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator('#viewMyProfile').waitFor({ state: 'visible', timeout: 10_000 });
     await screenshot(page, 'profile_view_entered');
 
     // Profile form exists
