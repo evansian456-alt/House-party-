@@ -33,6 +33,10 @@ pool.on('connect', () => {
 });
 
 pool.on('error', (err) => {
+  // 57P01 = "terminating connection due to administrator command"
+  // This is expected during test teardown when the DB container is stopped.
+  // Silently ignore it to avoid Jest "Cannot log after tests are done" errors.
+  if (err.code === '57P01') return;
   console.error('[Database] Unexpected error on idle client', err);
 });
 
