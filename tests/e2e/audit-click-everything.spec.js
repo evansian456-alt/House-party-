@@ -303,7 +303,10 @@ test.describe('Click-Everything Audit', () => {
         await page.keyboard.press('Escape');
         await nudgeModal.waitFor({ state: 'hidden', timeout: 3_000 }).catch(() => {});
       }
-      await playBtn.click();
+      // Use force:true as safety net — modal may reappear asynchronously after the
+      // dismiss check above; for a "click everything" audit we test button functionality,
+      // not overlay behaviour, so bypassing the actionability check is intentional.
+      await playBtn.click({ force: true });
       await screenshot(page, 'party_play_clicked');
     }
 

@@ -172,9 +172,9 @@ test.describe('Account lifecycle', () => {
       });
     }
 
-    // Fill signup form
-    const emailField = page.locator('input[type="email"], input[id="signupEmail"]').first();
-    await emailField.fill(freshUser.email);
+    // Wait for signup view and fill form
+    await page.locator('#signupEmail').waitFor({ state: 'visible', timeout: 8000 });
+    await page.locator('#signupEmail').fill(freshUser.email);
 
     const passwordField = page.locator('input[type="password"], input[id="signupPassword"]').first();
     await passwordField.fill(freshUser.password);
@@ -245,9 +245,9 @@ test.describe('Account lifecycle', () => {
       });
     }
 
-    // Fill with the same email
-    const emailField = page.locator('input[type="email"], input[id="signupEmail"]').first();
-    await emailField.fill(dupUser.email);
+    // Wait for signup view and fill form
+    await page.locator('#signupEmail').waitFor({ state: 'visible', timeout: 8000 });
+    await page.locator('#signupEmail').fill(dupUser.email);
 
     const passwordField = page.locator('input[type="password"], input[id="signupPassword"]').first();
     await passwordField.fill(dupUser.password);

@@ -260,6 +260,7 @@ test.describe('Authenticated home', () => {
 
     await page.goto(BASE);
     await page.click('#btnLandingLogin');
+    await page.locator('#loginEmail').waitFor({ state: 'visible', timeout: 5000 });
     await page.fill('#loginEmail', u.email);
     await page.fill('#loginPassword', u.password);
     await page.click('#formLogin button[type="submit"]');
