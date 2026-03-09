@@ -317,14 +317,15 @@ describe('Production Stress + Tier Validation', () => {
   // ─────────────────────────────────────────────────────────────────────────────
 
   describe('Capacity enforcement per tier', () => {
-    it('FREE host: 2-device hard limit (host + 1 guest max)', async () => {
+    it('FREE host: 3-device hard limit (host + 2 guests max)', async () => {
       const { code, res } = await httpCreateParty('FreeDJ', null);
       expect(res.status).toBe(200);
 
       expect((await httpJoinParty(code, 'G1')).status).toBe(200);
-      const extra = await httpJoinParty(code, 'G2');
+      expect((await httpJoinParty(code, 'G2')).status).toBe(200);
+      const extra = await httpJoinParty(code, 'G3');
       expect(extra.status).toBe(403);
-      expect(extra.body.error).toMatch(/limit|2 phones|capacity/i);
+      expect(extra.body.error).toMatch(/limit|3 phones|capacity/i);
     });
 
     it('PARTY_PASS host: 4-device limit (host + 3 guests max)', async () => {
@@ -681,9 +682,10 @@ describe('Production Stress + Tier Validation', () => {
       const { code, res } = await httpCreateParty('UpgradeHost', null);
       expect(res.status).toBe(200);
 
-      // FREE tier: only 1 guest allowed (host + 1 = 2 phones)
+      // FREE tier: 2 guests allowed (host + 2 = 3 phones)
       expect((await httpJoinParty(code, 'G1')).status).toBe(200);
-      expect((await httpJoinParty(code, 'G2')).status).toBe(403);
+      expect((await httpJoinParty(code, 'G2')).status).toBe(200);
+      expect((await httpJoinParty(code, 'G3')).status).toBe(403);
 
       // Simulate mid-session upgrade to PARTY_PASS
       const stored = await getPartyFromRedis(code);
@@ -694,8 +696,7 @@ describe('Production Stress + Tier Validation', () => {
       const local = parties.get(code);
       if (local) { local.tier = 'PARTY_PASS'; local.partyPassExpiresAt = stored.partyPassExpiresAt; local.maxPhones = 4; }
 
-      // After upgrade: slots 2 and 3 should now be available
-      expect((await httpJoinParty(code, 'G2')).status).toBe(200);
+      // After upgrade: 1 more slot available (G3 can now join)
       expect((await httpJoinParty(code, 'G3')).status).toBe(200);
       expect((await httpJoinParty(code, 'G4')).status).toBe(403);
     });
