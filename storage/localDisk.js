@@ -59,10 +59,19 @@ class LocalDiskProvider {
         // Write to temp file first, then rename for atomicity
         const tempFile = `${this.metadataFile}.tmp`;
         await writeFile(tempFile, JSON.stringify(obj, null, 2));
+        // Ensure containing directory exists before renaming
+        const dir = path.dirname(this.metadataFile);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         // Rename is atomic on most filesystems
-        fs.renameSync(tempFile, this.metadataFile);
+        try {
+          fs.renameSync(tempFile, this.metadataFile);
+        } catch (err) {
+          console.warn('[LocalDisk] Failed to save metadata:', err.message);
+          // Clean up orphaned temp file
+          try { fs.unlinkSync(tempFile); } catch (_) {}
+        }
       } catch (err) {
-        console.error('[LocalDisk] Failed to save metadata:', err.message);
+        console.warn('[LocalDisk] Failed to save metadata:', err.message);
       }
     });
   }

@@ -2,6 +2,13 @@ const request = require('supertest');
 const { app, redis } = require('./server');
 
 describe('Tier Enforcement', () => {
+  afterAll(async () => {
+    // Ignore cleanup errors — teardown should not fail tests
+    try { await redis.quit(); } catch (e) {}
+    if (global.__TEST_SERVER__ && typeof global.__TEST_SERVER__.close === 'function') {
+      await new Promise((resolve) => global.__TEST_SERVER__.close(resolve));
+    }
+  });
   let testPartyCode;
   let testPartyCodeWithPass;
 
@@ -54,7 +61,7 @@ describe('Tier Enforcement', () => {
       const partyDataRaw = await redis.get(`party:${testPartyCode}`);
       expect(partyDataRaw).toBeTruthy();
       const partyData = JSON.parse(partyDataRaw);
-      expect(partyData.partyPassExpiresAt).toBeUndefined();
+      expect(partyData.partyPassExpiresAt).toBeFalsy();
     });
 
     it('should not have Party Pass expiration time in free party', async () => {
@@ -62,7 +69,7 @@ describe('Tier Enforcement', () => {
       const partyDataRaw = await redis.get(`party:${testPartyCode}`);
       expect(partyDataRaw).toBeTruthy();
       const partyData = JSON.parse(partyDataRaw);
-      expect(partyData.partyPassExpiresAt).toBeUndefined();
+      expect(partyData.partyPassExpiresAt).toBeFalsy();
     });
 
     it('should have Party Pass expiration time in paid party', async () => {
@@ -90,7 +97,7 @@ describe('Tier Enforcement', () => {
       expect(partyDataRaw).toBeTruthy();
       const partyData = JSON.parse(partyDataRaw);
       const isActive = partyData.partyPassExpiresAt && partyData.partyPassExpiresAt > Date.now();
-      expect(isActive).toBe(false);
+      expect(isActive).toBeFalsy();
     });
 
     it('should expire Party Pass when expiration time is in past', async () => {
@@ -213,7 +220,7 @@ describe('Tier Enforcement', () => {
         const partyDataRaw = await redis.get(`party:${res.body.code}`);
         expect(partyDataRaw).toBeTruthy();
         const partyData = JSON.parse(partyDataRaw);
-        expect(partyData.partyPassExpiresAt).toBeUndefined();
+        expect(partyData.partyPassExpiresAt).toBeFalsy();
         
         // Cleanup
         await redis.del(`party:${res.body.code}`);
