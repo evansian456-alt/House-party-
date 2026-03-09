@@ -102,13 +102,13 @@ describe('Party Join Regression Fixes', () => {
       expect(response.body.tiers).toHaveProperty('PRO_MONTHLY');
       
       // Verify FREE tier has phone limit
-      expect(response.body.tiers.FREE.phoneLimit).toBe(2);
+      expect(response.body.tiers.FREE.phoneLimit).toBe(3);
       
       // Verify PARTY_PASS has messaging enabled
       expect(response.body.tiers.PARTY_PASS.chatEnabled).toBe(true);
       
       // Verify PRO has more phones than FREE
-      expect(response.body.tiers.PRO_MONTHLY.phoneLimit).toBeGreaterThan(2);
+      expect(response.body.tiers.PRO_MONTHLY.phoneLimit).toBeGreaterThan(3);
     });
   });
   
