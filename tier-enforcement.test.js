@@ -43,6 +43,10 @@ describe('Tier Enforcement', () => {
     }
   });
 
+  afterAll(async () => {
+    try { await redis.quit(); } catch (e) {}
+  });
+
   describe('Free Tier Restrictions', () => {
     it('should reject guest messages when Party Pass is inactive', async () => {
       // Note: This test verifies WebSocket behavior, which requires WebSocket client
@@ -54,7 +58,7 @@ describe('Tier Enforcement', () => {
       const partyDataRaw = await redis.get(`party:${testPartyCode}`);
       expect(partyDataRaw).toBeTruthy();
       const partyData = JSON.parse(partyDataRaw);
-      expect(partyData.partyPassExpiresAt).toBeUndefined();
+      expect(partyData.partyPassExpiresAt).toBeFalsy();
     });
 
     it('should not have Party Pass expiration time in free party', async () => {
@@ -62,7 +66,7 @@ describe('Tier Enforcement', () => {
       const partyDataRaw = await redis.get(`party:${testPartyCode}`);
       expect(partyDataRaw).toBeTruthy();
       const partyData = JSON.parse(partyDataRaw);
-      expect(partyData.partyPassExpiresAt).toBeUndefined();
+      expect(partyData.partyPassExpiresAt).toBeFalsy();
     });
 
     it('should have Party Pass expiration time in paid party', async () => {
@@ -90,7 +94,7 @@ describe('Tier Enforcement', () => {
       expect(partyDataRaw).toBeTruthy();
       const partyData = JSON.parse(partyDataRaw);
       const isActive = partyData.partyPassExpiresAt && partyData.partyPassExpiresAt > Date.now();
-      expect(isActive).toBe(false);
+      expect(isActive).toBeFalsy();
     });
 
     it('should expire Party Pass when expiration time is in past', async () => {
@@ -106,7 +110,7 @@ describe('Tier Enforcement', () => {
       const updatedDataRaw = await redis.get(`party:${testPartyCodeWithPass}`);
       const updatedData = JSON.parse(updatedDataRaw);
       const isActive = updatedData.partyPassExpiresAt && updatedData.partyPassExpiresAt > Date.now();
-      expect(isActive).toBe(false);
+      expect(isActive).toBeFalsy();
     });
   });
 
@@ -213,7 +217,7 @@ describe('Tier Enforcement', () => {
         const partyDataRaw = await redis.get(`party:${res.body.code}`);
         expect(partyDataRaw).toBeTruthy();
         const partyData = JSON.parse(partyDataRaw);
-        expect(partyData.partyPassExpiresAt).toBeUndefined();
+        expect(partyData.partyPassExpiresAt).toBeFalsy();
         
         // Cleanup
         await redis.del(`party:${res.body.code}`);

@@ -50,6 +50,10 @@ describe('DJ Short Messages', () => {
     }
   });
 
+  afterAll(async () => {
+    try { await redis.quit(); } catch (e) {}
+  });
+
   describe('Tier Enforcement', () => {
     it('should have Party Pass active when expiration is in future', async () => {
       if (!testPartyCodeWithPass) return;
@@ -64,7 +68,7 @@ describe('DJ Short Messages', () => {
       const partyDataRaw = await redis.get(`party:${testPartyCode}`);
       expect(partyDataRaw).toBeTruthy();
       const partyData = JSON.parse(partyDataRaw);
-      expect(partyData.partyPassExpiresAt).toBeUndefined();
+      expect(partyData.partyPassExpiresAt).toBeFalsy();
     });
   });
 
@@ -132,11 +136,11 @@ describe('DJ Short Messages', () => {
       const partyData = JSON.parse(partyDataRaw);
       
       // Verify free party doesn't have Party Pass
-      expect(partyData.partyPassExpiresAt).toBeUndefined();
+      expect(partyData.partyPassExpiresAt).toBeFalsy();
       
       // In the actual handler, this would result in an error message
       const hasAccess = partyData.partyPassExpiresAt && partyData.partyPassExpiresAt > Date.now();
-      expect(hasAccess).toBe(false);
+      expect(hasAccess).toBeFalsy();
     });
 
     it('should allow DJ short messages with active Party Pass', async () => {

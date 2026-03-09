@@ -2,6 +2,14 @@
 process.env.NODE_ENV = 'test';
 process.env.TEST_MODE = 'true';
 
+// Ensure the test storage directory exists before any test runs
+const fs = require('fs');
+const path = require('path');
+const testStorageDir = path.join(__dirname, 'test-storage-tmp');
+if (!fs.existsSync(testStorageDir)) {
+  fs.mkdirSync(testStorageDir, { recursive: true });
+}
+
 // Set JWT_SECRET for auth tests
 process.env.JWT_SECRET = 'test-secret-for-testing-only-do-not-use-in-production';
 
