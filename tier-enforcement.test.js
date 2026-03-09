@@ -90,6 +90,8 @@ describe('Tier Enforcement', () => {
       expect(partyDataRaw).toBeTruthy();
       const partyData = JSON.parse(partyDataRaw);
       const isActive = partyData.partyPassExpiresAt && partyData.partyPassExpiresAt > Date.now();
+      // toBeFalsy() intentionally used: isActive is a boolean expression that evaluates
+      // to false/null/undefined when partyPassExpiresAt is absent or expired
       expect(isActive).toBeFalsy();
     });
 

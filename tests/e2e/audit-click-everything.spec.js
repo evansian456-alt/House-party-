@@ -288,14 +288,14 @@ test.describe('Click-Everything Audit', () => {
     const code = (await codeEl.textContent()).trim();
     expect(code).toMatch(/^[A-Z0-9]{6}$/);
 
-    // Play button
+    // Play button — force:true + silent catch because media permissions may block interaction
     const playBtn = page.locator('[data-testid="play-party"]');
     if (await playBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await playBtn.click({ force: true, timeout: 5_000 }).catch(() => {});
       await screenshot(page, 'party_play_clicked');
     }
 
-    // Music upload button
+    // Music upload button — force:true + silent catch because file chooser may open
     const uploadBtn = page.locator('[data-testid="upload-audio"]');
     if (await uploadBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await uploadBtn.click({ force: true, timeout: 5_000 }).catch(() => {});

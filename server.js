@@ -1906,7 +1906,10 @@ app.get("/api/tier-info", apiLimiter, authMiddleware.optionalAuth, async (req, r
         tier = 'PARTY_PASS';
         effectiveTier = 'PARTY_PASS';
       }
-    } catch (e) { /* fall through to FREE */ }
+    } catch (e) {
+      console.error('[tier-info] Error resolving user tier:', e.message);
+      /* fall through to FREE */
+    }
   }
   res.json({
     tier,

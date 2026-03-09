@@ -258,7 +258,7 @@ test.describe('Sync accuracy', () => {
   test('guest sees same track and startAtServerMs as host', async ({ request }) => {
     const state = await (await request.get(`${BASE}/api/party-state?code=${syncCode}`)).json();
 
-    // Guest sees the same party state (no auth needed for party-state endpoint)
+    // Guest sees the same party state regardless of auth (public endpoint)
     const guestState = await (await request.get(`${BASE}/api/party-state?code=${syncCode}`)).json();
 
     if (state.currentTrack && guestState.currentTrack) {

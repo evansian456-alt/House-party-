@@ -241,7 +241,11 @@ test.describe('Streaming Party — PRO user access', () => {
         },
       },
     });
-    if (!webhookRes.ok()) return; // Webhook not available in this environment
+    if (!webhookRes.ok()) {
+      // Simulate-webhook endpoint only exists in NODE_ENV=test; skip gracefully if unavailable
+      console.log('[Test] Webhook simulation not available — skipping PRO streaming test');
+      return;
+    }
 
     const res = await request.post(`${BASE}/api/streaming/select-track`, {
       data: {
