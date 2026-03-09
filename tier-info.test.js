@@ -21,7 +21,7 @@ describe('Party Pass Tier Info', () => {
       expect(freeTier.guestQuickReplies).toBe(false);
       expect(freeTier.hostQuickMessages).toBe(false);
       expect(freeTier.systemAutoMessages).toBe(false);
-      expect(freeTier.phoneLimit).toBe(2);
+      expect(freeTier.phoneLimit).toBe(3);
       expect(freeTier.queueLimit).toBe(5);
       expect(Array.isArray(freeTier.notes)).toBe(true);
     });

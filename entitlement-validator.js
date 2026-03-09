@@ -5,7 +5,7 @@
  * NEVER trust client-side tier information.
  * 
  * Tiers:
- * - FREE: 2 phones, audio sync only, no messaging
+ * - FREE: 3 phones, audio sync only, no messaging
  * - PARTY_PASS: 4 phones, 2 hours duration, messaging features (£3.99)
  * - PRO_MONTHLY: 10 phones, unlimited time, all features (£9.99/month)
  * 
@@ -29,7 +29,7 @@ const TIER = {
 // Tier limits (must match store-catalog.js and constants)
 const TIER_LIMITS = {
   FREE: {
-    maxPhones: 2,
+    maxPhones: 3,
     maxDurationMs: null, // No time limit
     features: {
       audioSync: true,

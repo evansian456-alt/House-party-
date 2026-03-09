@@ -95,8 +95,8 @@ const INSTANCE_ID = `server-${Math.random().toString(36).substring(2, 9)}`;
 const PROMO_CODES = ["SS-PARTY-A9K2", "SS-PARTY-QM7L", "SS-PARTY-Z8P3"];
 
 // Party capacity limits
-const FREE_PARTY_LIMIT = 2; // Free parties limited to 2 phones
-const FREE_DEFAULT_MAX_PHONES = 2; // Alias for clarity in new code
+const FREE_PARTY_LIMIT = 3; // Free parties limited to 3 phones (1 host + 2 guests)
+const FREE_DEFAULT_MAX_PHONES = 3; // Alias for clarity in new code
 const MAX_PRO_PARTY_DEVICES = 100; // Practical limit for Pro parties
 
 // Upgrade durations
@@ -1765,6 +1765,11 @@ app.get("/api/me", apiLimiter, authMiddleware.requireAuth, async (req, res) => {
         createdAt: user.created_at,
         profileCompleted: user.profile_completed || false
       },
+      // Top-level shortcuts (some e2e tests read these directly off the response root)
+      id: user.id,
+      email: user.email,
+      djName: user.dj_name,
+      profileCompleted: user.profile_completed || false,
       isAdmin,
       tier,
       effectiveTier,
@@ -1886,8 +1891,26 @@ app.get("/api/store", authMiddleware.optionalAuth, (req, res) => {
  * GET /api/tier-info
  * Get tier definitions and feature information (single source of truth)
  */
-app.get("/api/tier-info", (req, res) => {
+app.get("/api/tier-info", apiLimiter, authMiddleware.optionalAuth, async (req, res) => {
+  // Resolve current user's tier if authenticated
+  let tier = 'FREE';
+  let effectiveTier = 'FREE';
+  if (req.user && req.user.userId) {
+    try {
+      const upgrades = await db.getOrCreateUserUpgrades(req.user.userId);
+      const entitlements = db.resolveEntitlements(upgrades);
+      if (entitlements.hasPro) {
+        tier = 'PRO';
+        effectiveTier = 'PRO';
+      } else if (entitlements.hasPartyPass) {
+        tier = 'PARTY_PASS';
+        effectiveTier = 'PARTY_PASS';
+      }
+    } catch (e) { /* fall through to FREE */ }
+  }
   res.json({
+    tier,
+    effectiveTier,
     appName: "Phone Party",
     tiers: {
       FREE: {
@@ -1900,9 +1923,9 @@ app.get("/api/tier-info", (req, res) => {
         messageTtlMs: 0,
         maxTextLength: 0,
         queueLimit: 5,
-        phoneLimit: 2,
+        phoneLimit: 3,
         notes: [
-          "2 phones maximum",
+          "3 phones maximum",
           "No chat or messaging features",
           "Basic DJ controls only",
           "Unlimited party time"
@@ -3486,7 +3509,7 @@ async function savePartyState(code, partyData) {
 
 // Shared party creation function used by both HTTP and WS paths
 // This ensures consistent party data structure across all creation methods
-async function createPartyCommon({ djName, source, hostId, hostConnected }) {
+async function createPartyCommon({ djName, source, hostId, hostUserId, hostConnected }) {
   // Check if we should use Redis or fallback
   const useRedis = redis && redisReady;
   
@@ -3523,6 +3546,7 @@ async function createPartyCommon({ djName, source, hostId, hostConnected }) {
     chatMode: "OPEN",
     createdAt,
     hostId,
+    ...(hostUserId ? { hostUserId } : {}),
     hostConnected,
     guestCount: 0,
     guests: [],
@@ -3530,7 +3554,6 @@ async function createPartyCommon({ djName, source, hostId, hostConnected }) {
     expiresAt: createdAt + PARTY_TTL_MS,
     // Tier-based fields (set by backend entitlement validation only)
     tier: null,
-    partyPassExpiresAt: null,
     maxPhones: null,
     // History fields for late joiners
     reactionHistory: [],
@@ -3559,7 +3582,7 @@ async function createPartyCommon({ djName, source, hostId, hostConnected }) {
 }
 
 // POST /api/create-party - Create a new party
-app.post("/api/create-party", partyCreationLimiter, async (req, res) => {
+app.post("/api/create-party", partyCreationLimiter, authMiddleware.optionalAuth, async (req, res) => {
   const timestamp = new Date().toISOString();
   console.log(`[HTTP] POST /api/create-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
   
@@ -3623,10 +3646,12 @@ app.post("/api/create-party", partyCreationLimiter, async (req, res) => {
   try {
     // Use shared party creation function
     const hostId = nextHostId++;
+    const hostUserId = req.user?.userId ?? null;
     const { code, partyData } = await createPartyCommon({
       djName: djName,
       source: partySource,
       hostId: hostId,
+      hostUserId: hostUserId,
       hostConnected: false
     });
     
@@ -3710,15 +3735,16 @@ app.post("/api/join-party", async (req, res) => {
     const timestamp = new Date().toISOString();
     console.log(`[HTTP] POST /api/join-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
     
-    const { partyCode, nickname } = req.body;
+    const { partyCode: _partyCode, code: _code, nickname } = req.body;
+    const rawPartyCode = _partyCode || _code;
     
-    if (!partyCode) {
+    if (!rawPartyCode) {
       console.log("[join-party] end (missing party code)");
       return res.status(400).json({ error: "Party code is required" });
     }
     
     // Normalize party code: trim and uppercase
-    const code = normalizePartyCode(partyCode);
+    const code = normalizePartyCode(rawPartyCode);
     
     // Validate party code length
     if (code.length !== 6) {
@@ -3806,8 +3832,8 @@ app.post("/api/join-party", async (req, res) => {
     if (totalDevices >= maxAllowed) {
       console.log(`[join-party] Party limit reached: ${code}, current: ${totalDevices}, max: ${maxAllowed}`);
       return res.status(403).json({ 
-        error: `Party limit reached (${maxAllowed} ${maxAllowed === 2 ? 'phones' : 'devices'})`,
-        details: maxAllowed === 2 ? "Free parties are limited to 2 phones" : undefined
+        error: `Party limit reached (${maxAllowed} ${maxAllowed === 3 ? 'phones' : 'devices'})`,
+        details: maxAllowed === 3 ? "Free parties are limited to 3 phones" : undefined
       });
     }
     
@@ -7916,7 +7942,7 @@ async function handleJoin(ws, msg) {
       console.log(`[WS] Join blocked - Party limit reached, partyCode: ${code}, clientId: ${client.id}, current: ${currentMemberCount}, max: ${maxAllowed}`);
       safeSend(ws, JSON.stringify({ 
         t: "ERROR", 
-        message: maxAllowed === 2 ? "Free parties are limited to 2 phones" : `Party limit reached (${maxAllowed} devices)`
+        message: maxAllowed === 3 ? "Free parties are limited to 3 phones" : `Party limit reached (${maxAllowed} devices)`
       }));
       return;
     }

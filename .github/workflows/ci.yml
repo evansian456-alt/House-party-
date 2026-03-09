@@ -46,6 +46,7 @@ jobs:
       REDIS_URL: redis://localhost:6379
       ALLOW_LOCAL_DISK_IN_PROD: "true"
       PUBLIC_BASE_URL: http://localhost:3000
+      STREAMING_PARTY_ENABLED: "true"
 
     steps:
       - name: Checkout
@@ -86,6 +87,8 @@ jobs:
         env:
           BASE_URL: http://localhost:8080
           ADMIN_EMAILS: ianevans2023@outlook.com
+          STRIPE_PRICE_PRO_MONTHLY: price_pro_monthly_test
+          STRIPE_PRICE_PARTY_PASS: price_party_pass_test
         continue-on-error: false
 
       - name: Upload e2e test report

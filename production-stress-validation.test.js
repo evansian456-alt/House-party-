@@ -5,7 +5,7 @@
  * tier enforcement, payment/entitlement logic and WS reliability.
  *
  * Tiers:
- *   FREE         — 2 phones max, no messaging
+ *   FREE         — 3 phones max, no messaging
  *   PARTY_PASS   — 4 phones max, messaging enabled (2 h duration)
  *   SUBSCRIPTION — 10 phones max, all features (maps to PRO / PRO_MONTHLY server-side)
  *
@@ -317,14 +317,15 @@ describe('Production Stress + Tier Validation', () => {
   // ─────────────────────────────────────────────────────────────────────────────
 
   describe('Capacity enforcement per tier', () => {
-    it('FREE host: 2-device hard limit (host + 1 guest max)', async () => {
+    it('FREE host: 3-device hard limit (host + 2 guests max)', async () => {
       const { code, res } = await httpCreateParty('FreeDJ', null);
       expect(res.status).toBe(200);
 
       expect((await httpJoinParty(code, 'G1')).status).toBe(200);
-      const extra = await httpJoinParty(code, 'G2');
+      expect((await httpJoinParty(code, 'G2')).status).toBe(200);
+      const extra = await httpJoinParty(code, 'G3');
       expect(extra.status).toBe(403);
-      expect(extra.body.error).toMatch(/limit|2 phones|capacity/i);
+      expect(extra.body.error).toMatch(/limit|3 phones|capacity/i);
     });
 
     it('PARTY_PASS host: 4-device limit (host + 3 guests max)', async () => {
@@ -681,9 +682,10 @@ describe('Production Stress + Tier Validation', () => {
       const { code, res } = await httpCreateParty('UpgradeHost', null);
       expect(res.status).toBe(200);
 
-      // FREE tier: only 1 guest allowed (host + 1 = 2 phones)
+      // FREE tier: 2 guests allowed (host + 2 = 3 phones)
       expect((await httpJoinParty(code, 'G1')).status).toBe(200);
-      expect((await httpJoinParty(code, 'G2')).status).toBe(403);
+      expect((await httpJoinParty(code, 'G2')).status).toBe(200);
+      expect((await httpJoinParty(code, 'G3')).status).toBe(403);
 
       // Simulate mid-session upgrade to PARTY_PASS
       const stored = await getPartyFromRedis(code);
@@ -694,8 +696,7 @@ describe('Production Stress + Tier Validation', () => {
       const local = parties.get(code);
       if (local) { local.tier = 'PARTY_PASS'; local.partyPassExpiresAt = stored.partyPassExpiresAt; local.maxPhones = 4; }
 
-      // After upgrade: slots 2 and 3 should now be available
-      expect((await httpJoinParty(code, 'G2')).status).toBe(200);
+      // After upgrade: G3 (previously rejected) can now join, G4 cannot
       expect((await httpJoinParty(code, 'G3')).status).toBe(200);
       expect((await httpJoinParty(code, 'G4')).status).toBe(403);
     });
@@ -926,8 +927,8 @@ describe('Production Stress + Tier Validation', () => {
         expect(r.valid).toBe(true);
       });
 
-      it('rejects join when FREE party is at 2-phone capacity', () => {
-        const r = validateSessionJoin({ tier: EV_TIER.FREE }, 2);
+      it('rejects join when FREE party is at 3-phone capacity', () => {
+        const r = validateSessionJoin({ tier: EV_TIER.FREE }, 3);
         expect(r.valid).toBe(false);
       });
     });
@@ -955,7 +956,7 @@ describe('Production Stress + Tier Validation', () => {
     });
 
     describe('TIER_LIMITS constants', () => {
-      it('FREE maxPhones = 2',           () => expect(TIER_LIMITS.FREE.maxPhones).toBe(2));
+      it('FREE maxPhones = 3',           () => expect(TIER_LIMITS.FREE.maxPhones).toBe(3));
       it('PARTY_PASS maxPhones = 4',     () => expect(TIER_LIMITS.PARTY_PASS.maxPhones).toBe(4));
       it('PRO_MONTHLY maxPhones = 10',   () => expect(TIER_LIMITS.PRO_MONTHLY.maxPhones).toBe(10));
       it('FREE messaging = false',       () => expect(TIER_LIMITS.FREE.features.messaging).toBe(false));

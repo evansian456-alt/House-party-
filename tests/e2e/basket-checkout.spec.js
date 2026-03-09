@@ -43,6 +43,7 @@ test.describe('Basket — add / remove', () => {
   });
 
   test('basket starts empty', async ({ request }) => {
+    await signupAndLogin(request, user);
     const res = await request.get(`${BASE}/api/basket`);
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
@@ -50,6 +51,7 @@ test.describe('Basket — add / remove', () => {
   });
 
   test('add item to basket', async ({ request }) => {
+    await signupAndLogin(request, user);
     const res = await request.post(`${BASE}/api/basket/add`, {
       data: { priceId: TEST_PRICE_ID },
     });
@@ -59,6 +61,7 @@ test.describe('Basket — add / remove', () => {
   });
 
   test('basket contents match after add — UI state consistency', async ({ request }) => {
+    await signupAndLogin(request, user);
     // Backend state
     const backendRes = await request.get(`${BASE}/api/basket`);
     const backendBody = await backendRes.json();
@@ -68,6 +71,7 @@ test.describe('Basket — add / remove', () => {
   });
 
   test('adding duplicate item does not create duplicates', async ({ request }) => {
+    await signupAndLogin(request, user);
     // Add the same item again
     await request.post(`${BASE}/api/basket/add`, { data: { priceId: TEST_PRICE_ID } });
 
@@ -78,6 +82,7 @@ test.describe('Basket — add / remove', () => {
   });
 
   test('remove item from basket', async ({ request }) => {
+    await signupAndLogin(request, user);
     // Ensure item is in basket first
     await request.post(`${BASE}/api/basket/add`, { data: { priceId: TEST_PRICE_ID } });
 
@@ -114,6 +119,7 @@ test.describe('Basket — checkout session', () => {
   });
 
   test('checkout with empty basket returns 400', async ({ request }) => {
+    await signupAndLogin(request, user);
     // Ensure basket is empty
     const basketRes = await request.get(`${BASE}/api/basket`);
     const { basket } = await basketRes.json();
@@ -126,6 +132,7 @@ test.describe('Basket — checkout session', () => {
   });
 
   test('checkout with item creates session (Stripe configured) or 503 (not configured)', async ({ request }) => {
+    await signupAndLogin(request, user);
     await request.post(`${BASE}/api/basket/add`, { data: { priceId: TEST_PRICE_ID } });
 
     const res = await request.post(`${BASE}/api/basket/checkout`);
@@ -139,6 +146,7 @@ test.describe('Basket — checkout session', () => {
   });
 
   test('direct create-checkout-session endpoint works', async ({ request }) => {
+    await signupAndLogin(request, user);
     const res = await request.post(`${BASE}/api/create-checkout-session`, {
       data: { tier: 'PARTY_PASS' },
     });

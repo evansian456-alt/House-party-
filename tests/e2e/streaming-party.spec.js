@@ -222,6 +222,27 @@ test.describe('Streaming Party — PRO user access', () => {
     if (process.env.NODE_ENV !== 'test') return;
     if (!proUser) return;
 
+    // Re-authenticate as proUser (beforeAll auth doesn't carry to per-test request context)
+    await signupAndLogin(request, proUser);
+
+    // Elevate to PRO via test webhook
+    const meRes = await request.get(`${BASE}/api/me`);
+    if (!meRes.ok()) return;
+    const { user } = await meRes.json();
+    const webhookRes = await request.post(`${BASE}/api/test/stripe/simulate-webhook`, {
+      data: {
+        type: 'checkout.session.completed',
+        data: {
+          metadata: {
+            userId: user.id,
+            priceId: process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthly_test',
+          },
+          client_reference_id: user.id,
+        },
+      },
+    });
+    if (!webhookRes.ok()) return; // Webhook not available in this environment
+
     const res = await request.post(`${BASE}/api/streaming/select-track`, {
       data: {
         partyCode: 'TEST01',

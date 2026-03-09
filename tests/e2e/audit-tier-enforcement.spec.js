@@ -40,13 +40,13 @@ function makeUser(p = 'tier') {
 // /api/tier-info accuracy
 // ─────────────────────────────────────────────────────────────────
 test.describe('Tier info API accuracy', () => {
-  test('FREE tier: chatEnabled=false, phoneLimit=2, unlimited time', async ({ request }) => {
+  test('FREE tier: chatEnabled=false, phoneLimit=3, unlimited time', async ({ request }) => {
     const res = await request.get(`${BASE}/api/tier-info`);
     const info = await res.json();
     const free = info.tiers.FREE;
     expect(free.chatEnabled).toBe(false);
-    expect(free.phoneLimit).toBe(2);
-    expect(free.notes.join(' ')).toMatch(/2 phone/i);
+    expect(free.phoneLimit).toBe(3);
+    expect(free.notes.join(' ')).toMatch(/3 phone/i);
   });
 
   test('PARTY_PASS tier: chatEnabled=true, phoneLimit=4, 2h duration', async ({ request }) => {
@@ -278,9 +278,9 @@ test.describe('UI tier display consistency', () => {
     const planPill = page.locator('#planPill');
     if (await planPill.isVisible({ timeout: 2000 }).catch(() => false)) {
       const text = await planPill.textContent();
-      // FREE user should see "FREE · 2 phones" or similar
+      // FREE user should see "FREE · 3 phones" or similar
       expect(text).toMatch(/FREE/i);
-      expect(text).toMatch(/2/);
+      expect(text).toMatch(/3/);
     }
   });
 
