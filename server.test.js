@@ -1174,11 +1174,12 @@ describe('Party Management Endpoints', () => {
       const createResponse = await request(app).post('/api/create-party')
         .send({ djName: 'DJ Test' });
       const partyCode = createResponse.body.partyCode;
+      const hostId = createResponse.body.hostId;
       
-      // End party
+      // End party (hostId required for auth)
       const endResponse = await request(app)
         .post('/api/end-party')
-        .send({ partyCode });
+        .send({ partyCode, hostId });
       
       expect(endResponse.status).toBe(200);
       expect(endResponse.body.ok).toBe(true);
@@ -1202,7 +1203,7 @@ describe('Party Management Endpoints', () => {
     it('should return 404 if party does not exist', async () => {
       const response = await request(app)
         .post('/api/end-party')
-        .send({ partyCode: 'NOEXST' });
+        .send({ partyCode: 'NOEXST', hostId: 999 });
       
       expect(response.status).toBe(404);
       expect(response.body.error).toBe('Party not found or expired');
@@ -1213,11 +1214,12 @@ describe('Party Management Endpoints', () => {
       const createResponse = await request(app).post('/api/create-party')
         .send({ djName: 'DJ Test' });
       const partyCode = createResponse.body.partyCode;
+      const hostId = createResponse.body.hostId;
       
-      // End party
+      // End party (hostId required for auth)
       await request(app)
         .post('/api/end-party')
-        .send({ partyCode });
+        .send({ partyCode, hostId });
       
       // Try to join ended party
       const joinResponse = await request(app)

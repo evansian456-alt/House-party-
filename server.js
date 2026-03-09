@@ -3858,6 +3858,7 @@ app.post("/api/join-party", async (req, res) => {
     // Respond with success and guest info
     const response = { 
       ok: true,
+      success: true,
       guestId,
       nickname: guestNickname,
       partyCode: code,
@@ -3984,19 +3985,29 @@ app.get("/api/party", async (req, res) => {
     
     console.log(`[HTTP] Party found: ${code}, status: ${status}, guestCount: ${partyData.guestCount || 0}, timeRemainingMs: ${timeRemainingMs}`);
     
-    // Return full party state
+    const expiresAt = partyData.expiresAt || (partyData.createdAt + PARTY_TTL_MS);
+    const guestCount = partyData.guestCount || 0;
+    const guests = partyData.guests || [];
+    const chatMode = partyData.chatMode || "OPEN";
+    const partyPro = !!partyData.partyPro;
+    const source = partyData.source || "local";
+    const ended = status === "ended";
+
+    // Nested party object for clients that expect it; flat fields kept for backward compatibility
+    const party = { code, status, expiresAt, timeRemainingMs, guestCount, guests, chatMode, createdAt: partyData.createdAt, partyPro, source, ended };
     res.json({
       exists: true,
       partyCode: code,
       status,
-      expiresAt: partyData.expiresAt || (partyData.createdAt + PARTY_TTL_MS),
+      expiresAt,
       timeRemainingMs,
-      guestCount: partyData.guestCount || 0,
-      guests: partyData.guests || [],
-      chatMode: partyData.chatMode || "OPEN",
+      guestCount,
+      guests,
+      chatMode,
       createdAt: partyData.createdAt,
-      partyPro: !!partyData.partyPro, // Party-wide Pro status
-      source: partyData.source || "local" // Host-selected source
+      partyPro,
+      source,
+      party // nested party object for client compatibility
     });
     
   } catch (error) {
@@ -4117,7 +4128,18 @@ app.get("/api/party-state", async (req, res) => {
       // Queue
       queue: queue,
       // DJ auto-messages
-      djMessages: djMessages
+      djMessages: djMessages,
+      // Nested party object for client compatibility
+      party: {
+        code,
+        status,
+        guestCount: partyData.guestCount || 0,
+        guests: partyData.guests || [],
+        chatMode: partyData.chatMode || "OPEN",
+        createdAt: partyData.createdAt,
+        expiresAt: partyData.expiresAt || (partyData.createdAt + PARTY_TTL_MS),
+        ended: status === "ended"
+      }
     });
     
   } catch (error) {
@@ -4219,12 +4241,12 @@ app.post("/api/leave-party", async (req, res) => {
 });
 
 // POST /api/end-party - End party early (host only)
-app.post("/api/end-party", async (req, res) => {
+app.post("/api/end-party", apiLimiter, async (req, res) => {
   const timestamp = new Date().toISOString();
   console.log(`[HTTP] POST /api/end-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
   
   try {
-    const { partyCode } = req.body;
+    const { partyCode, hostId } = req.body;
     
     if (!partyCode) {
       return res.status(400).json({ error: "Party code is required" });
@@ -4265,6 +4287,12 @@ app.post("/api/end-party", async (req, res) => {
     
     if (!partyData) {
       return res.status(404).json({ error: "Party not found or expired" });
+    }
+    
+    // Validate host authority — only the party creator may end the party
+    const authCheck = validateHostAuth(hostId, partyData);
+    if (!authCheck.valid) {
+      return res.status(403).json({ error: authCheck.error });
     }
     
     // Mark party as ended
@@ -4309,7 +4337,7 @@ app.post("/api/end-party", async (req, res) => {
       parties.delete(code);
     }
     
-    res.json({ ok: true });
+    res.json({ ok: true, success: true });
     
   } catch (error) {
     console.error(`[HTTP] Error ending party, instanceId: ${INSTANCE_ID}:`, error);
