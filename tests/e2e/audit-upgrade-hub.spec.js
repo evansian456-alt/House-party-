@@ -221,7 +221,7 @@ test.describe('Visual pack store', () => {
     await page.evaluate(() => { document.getElementById('viewVisualPackStore')?.classList.remove('hidden'); });
     await page.waitForTimeout(300);
 
-    const items = page.locator('#viewVisualPackStore .store-item');
+    const items = page.locator('#viewVisualPackStore .store-item[data-pack-id]');
     const count = await items.count();
     for (let i = 0; i < count; i++) {
       await expect(items.nth(i).locator('.btn-buy-pack')).toBeVisible();

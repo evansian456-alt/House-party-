@@ -35,7 +35,7 @@ async function signupAndLogin(request, user) {
 test.describe('Tier enforcement — FREE', () => {
   let freeUser;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     freeUser = makeUser('free');
     await signupAndLogin(request, freeUser);
   });
@@ -66,7 +66,7 @@ test.describe('Tier enforcement — FREE', () => {
 test.describe('Tier enforcement — PARTY_PASS (simulated)', () => {
   let ppUser;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     if (process.env.NODE_ENV !== 'test') return;
     ppUser = makeUser('pp');
     await signupAndLogin(request, ppUser);
@@ -131,7 +131,7 @@ test.describe('Tier enforcement — PARTY_PASS (simulated)', () => {
 test.describe('Tier enforcement — PRO (simulated)', () => {
   let proUser;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     if (process.env.NODE_ENV !== 'test') return;
     proUser = makeUser('pro');
     await signupAndLogin(request, proUser);

@@ -173,11 +173,9 @@ test.describe('PARTY_PASS tier enforcement (test mode)', () => {
       data: {
         type: 'checkout.session.completed',
         data: {
-          object: {
-            metadata: { userId: String(meBefore.id) },
-            amount_total: 399,
-            mode: 'payment',
-          },
+          metadata: { userId: String(meBefore.id), priceId: process.env.STRIPE_PRICE_PARTY_PASS || 'price_party_pass_test' },
+          amount_total: 399,
+          mode: 'payment',
         },
       },
     });

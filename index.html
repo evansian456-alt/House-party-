@@ -225,6 +225,16 @@
             </div>
             <input type="hidden" id="favoriteColor" value="purple" />
           </div>
+          <div class="form-group hidden" style="flex-direction:row;align-items:flex-start;gap:10px" id="accountTermsGroup">
+            <input type="checkbox" id="accountTermsAccept" style="margin-top:3px;flex-shrink:0" />
+            <label for="accountTermsAccept" style="font-size:13px;line-height:1.5;cursor:pointer">
+              I agree to the
+              <a href="#" class="link-to-terms" style="color:var(--accent,#6366f1)">Terms &amp; Conditions</a>
+              and
+              <a href="#" class="link-to-privacy" style="color:var(--accent,#6366f1)">Privacy Policy</a>.
+            </label>
+          </div>
+          <div class="auth-error hidden" id="accountCreationError"></div>
           <button class="btn primary" id="btnCreateAccountSubmit">Save Profile & Continue 🚀</button>
         </div>
         
@@ -358,12 +368,12 @@
 
       <!-- Two Giant Neon Buttons -->
       <div class="start-join-buttons">
-        <button class="btn-giant btn-create-party" id="btnShowCreateParty" data-testid="create-party">
+        <button class="btn-giant btn-create-party" id="btnShowCreateParty">
           <span class="btn-giant-icon">🎧</span>
           <span class="btn-giant-text">CREATE PARTY</span>
           <span class="btn-giant-subtitle">Be the DJ</span>
         </button>
-        <button class="btn-giant btn-join-party" id="btnShowJoinParty" data-testid="join-party">
+        <button class="btn-giant btn-join-party" id="btnShowJoinParty">
           <span class="btn-giant-icon">🎵</span>
           <span class="btn-giant-text">JOIN PARTY</span>
           <span class="btn-giant-subtitle">Join the vibe</span>
@@ -1351,12 +1361,7 @@
         </button>
         <div class="tiny muted" style="margin-bottom: 20px;">Manually re-sync if audio drifts</div>
         
-        <!-- Volume Control -->
-        <div class="guest-volume-control">
-          <label class="tiny muted" for="guestVolumeSlider">🔊 Volume</label>
-          <input type="range" id="guestVolumeSlider" min="0" max="100" value="80" class="volume-slider" />
-          <span class="tiny muted" id="guestVolumeValue">80%</span>
-        </div>
+        <!-- Volume Control (duplicate removed — see Guest Volume Control above) -->
         
         <!-- Sync Quality Indicator -->
         <div class="sync-quality-section">
@@ -1935,7 +1940,7 @@
       <h2>🎵 Create Account</h2>
       <p class="muted">Join Phone Party and start your DJ journey</p>
       
-      <form id="formSignup" class="auth-form" data-testid="signup-form">
+      <form id="formSignup" class="auth-form" data-testid="signup-form" novalidate>
         <div class="form-group">
           <label for="signupEmail">Email</label>
           <input type="email" id="signupEmail" class="input-field" placeholder="your@email.com" required />

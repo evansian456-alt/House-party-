@@ -95,8 +95,8 @@ const INSTANCE_ID = `server-${Math.random().toString(36).substring(2, 9)}`;
 const PROMO_CODES = ["SS-PARTY-A9K2", "SS-PARTY-QM7L", "SS-PARTY-Z8P3"];
 
 // Party capacity limits
-const FREE_PARTY_LIMIT = 2; // Free parties limited to 2 phones
-const FREE_DEFAULT_MAX_PHONES = 2; // Alias for clarity in new code
+const FREE_PARTY_LIMIT = 3; // Free parties limited to 3 phones (1 host + 2 guests)
+const FREE_DEFAULT_MAX_PHONES = 3; // Alias for clarity in new code
 const MAX_PRO_PARTY_DEVICES = 100; // Practical limit for Pro parties
 
 // Upgrade durations
@@ -1765,6 +1765,11 @@ app.get("/api/me", apiLimiter, authMiddleware.requireAuth, async (req, res) => {
         createdAt: user.created_at,
         profileCompleted: user.profile_completed || false
       },
+      // Top-level shortcuts (some e2e tests read these directly off the response root)
+      id: user.id,
+      email: user.email,
+      djName: user.dj_name,
+      profileCompleted: user.profile_completed || false,
       isAdmin,
       tier,
       effectiveTier,
@@ -1886,8 +1891,26 @@ app.get("/api/store", authMiddleware.optionalAuth, (req, res) => {
  * GET /api/tier-info
  * Get tier definitions and feature information (single source of truth)
  */
-app.get("/api/tier-info", (req, res) => {
+app.get("/api/tier-info", apiLimiter, authMiddleware.optionalAuth, async (req, res) => {
+  // Resolve current user's tier if authenticated
+  let tier = 'FREE';
+  let effectiveTier = 'FREE';
+  if (req.user && req.user.userId) {
+    try {
+      const upgrades = await db.getOrCreateUserUpgrades(req.user.userId);
+      const entitlements = db.resolveEntitlements(upgrades);
+      if (entitlements.hasPro) {
+        tier = 'PRO';
+        effectiveTier = 'PRO';
+      } else if (entitlements.hasPartyPass) {
+        tier = 'PARTY_PASS';
+        effectiveTier = 'PARTY_PASS';
+      }
+    } catch (e) { /* fall through to FREE */ }
+  }
   res.json({
+    tier,
+    effectiveTier,
     appName: "Phone Party",
     tiers: {
       FREE: {
@@ -1900,9 +1923,9 @@ app.get("/api/tier-info", (req, res) => {
         messageTtlMs: 0,
         maxTextLength: 0,
         queueLimit: 5,
-        phoneLimit: 2,
+        phoneLimit: 3,
         notes: [
-          "2 phones maximum",
+          "3 phones maximum",
           "No chat or messaging features",
           "Basic DJ controls only",
           "Unlimited party time"
@@ -3486,7 +3509,7 @@ async function savePartyState(code, partyData) {
 
 // Shared party creation function used by both HTTP and WS paths
 // This ensures consistent party data structure across all creation methods
-async function createPartyCommon({ djName, source, hostId, hostConnected }) {
+async function createPartyCommon({ djName, source, hostId, hostUserId, hostConnected }) {
   // Check if we should use Redis or fallback
   const useRedis = redis && redisReady;
   
@@ -3523,6 +3546,7 @@ async function createPartyCommon({ djName, source, hostId, hostConnected }) {
     chatMode: "OPEN",
     createdAt,
     hostId,
+    ...(hostUserId ? { hostUserId } : {}),
     hostConnected,
     guestCount: 0,
     guests: [],
@@ -3530,7 +3554,6 @@ async function createPartyCommon({ djName, source, hostId, hostConnected }) {
     expiresAt: createdAt + PARTY_TTL_MS,
     // Tier-based fields (set by backend entitlement validation only)
     tier: null,
-    partyPassExpiresAt: null,
     maxPhones: null,
     // History fields for late joiners
     reactionHistory: [],
@@ -3559,7 +3582,7 @@ async function createPartyCommon({ djName, source, hostId, hostConnected }) {
 }
 
 // POST /api/create-party - Create a new party
-app.post("/api/create-party", partyCreationLimiter, async (req, res) => {
+app.post("/api/create-party", partyCreationLimiter, authMiddleware.optionalAuth, async (req, res) => {
   const timestamp = new Date().toISOString();
   console.log(`[HTTP] POST /api/create-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
   
@@ -3623,10 +3646,12 @@ app.post("/api/create-party", partyCreationLimiter, async (req, res) => {
   try {
     // Use shared party creation function
     const hostId = nextHostId++;
+    const hostUserId = req.user?.userId ?? null;
     const { code, partyData } = await createPartyCommon({
       djName: djName,
       source: partySource,
       hostId: hostId,
+      hostUserId: hostUserId,
       hostConnected: false
     });
     
@@ -3710,15 +3735,16 @@ app.post("/api/join-party", async (req, res) => {
     const timestamp = new Date().toISOString();
     console.log(`[HTTP] POST /api/join-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
     
-    const { partyCode, nickname } = req.body;
+    const { partyCode: _partyCode, code: _code, nickname } = req.body;
+    const rawPartyCode = _partyCode || _code;
     
-    if (!partyCode) {
+    if (!rawPartyCode) {
       console.log("[join-party] end (missing party code)");
       return res.status(400).json({ error: "Party code is required" });
     }
     
     // Normalize party code: trim and uppercase
-    const code = normalizePartyCode(partyCode);
+    const code = normalizePartyCode(rawPartyCode);
     
     // Validate party code length
     if (code.length !== 6) {
@@ -3800,14 +3826,13 @@ app.post("/api/join-party", async (req, res) => {
     const maxAllowed = await getMaxAllowedPhones(code, normalizedPartyData);
     const currentGuestCount = normalizedPartyData.guestCount || 0;
     
-    // Count total devices (host + guests) - host counts as 1 device
+    // Count total devices (host + guests) against the maxPhones limit
     const totalDevices = 1 + currentGuestCount;
-    
     if (totalDevices >= maxAllowed) {
       console.log(`[join-party] Party limit reached: ${code}, current: ${totalDevices}, max: ${maxAllowed}`);
       return res.status(403).json({ 
-        error: `Party limit reached (${maxAllowed} ${maxAllowed === 2 ? 'phones' : 'devices'})`,
-        details: maxAllowed === 2 ? "Free parties are limited to 2 phones" : undefined
+        error: `Party limit reached (${maxAllowed} ${maxAllowed === 3 ? 'phones' : 'devices'})`,
+        details: maxAllowed === 3 ? "Free parties are limited to 3 phones" : undefined
       });
     }
     
@@ -3858,11 +3883,18 @@ app.post("/api/join-party", async (req, res) => {
     // Respond with success and guest info
     const response = { 
       ok: true,
+      success: true,
       guestId,
       nickname: guestNickname,
       partyCode: code,
       djName: partyData.djName || "DJ", // Fallback for backward compatibility with old parties
-      chatMode: partyData.chatMode || "OPEN" // Include chat mode for initial setup
+      chatMode: partyData.chatMode || "OPEN", // Include chat mode for initial setup
+      party: {
+        code,
+        status: partyData.status || "active",
+        djName: partyData.djName || "DJ",
+        guestCount: partyData.guestCount || 0,
+      }
     };
     
     // Add warning if using fallback mode in production
@@ -3996,7 +4028,17 @@ app.get("/api/party", async (req, res) => {
       chatMode: partyData.chatMode || "OPEN",
       createdAt: partyData.createdAt,
       partyPro: !!partyData.partyPro, // Party-wide Pro status
-      source: partyData.source || "local" // Host-selected source
+      source: partyData.source || "local", // Host-selected source
+      // Nested party object for API contract compatibility
+      party: {
+        code,
+        status,
+        ended: status === 'ended',
+        djName: partyData.djName,
+        guestCount: partyData.guestCount || 0,
+        createdAt: partyData.createdAt,
+        expiresAt: partyData.expiresAt || (partyData.createdAt + PARTY_TTL_MS),
+      }
     });
     
   } catch (error) {
@@ -4117,7 +4159,14 @@ app.get("/api/party-state", async (req, res) => {
       // Queue
       queue: queue,
       // DJ auto-messages
-      djMessages: djMessages
+      djMessages: djMessages,
+      // Nested party object for API contract compatibility
+      party: {
+        code,
+        status,
+        guestCount: partyData.guestCount || 0,
+        createdAt: partyData.createdAt,
+      }
     });
     
   } catch (error) {
@@ -4136,7 +4185,8 @@ app.post("/api/leave-party", async (req, res) => {
   console.log(`[HTTP] POST /api/leave-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
   
   try {
-    const { partyCode, guestId } = req.body;
+    const { partyCode: _leavePartyCode, code: _leaveCode, guestId } = req.body;
+    const partyCode = _leavePartyCode || _leaveCode;
     
     if (!partyCode) {
       return res.status(400).json({ error: "Party code is required" });
@@ -4205,7 +4255,8 @@ app.post("/api/leave-party", async (req, res) => {
     }
     
     res.json({ 
-      ok: true, 
+      ok: true,
+      success: true,
       guestCount: partyData.guestCount 
     });
     
@@ -4219,19 +4270,20 @@ app.post("/api/leave-party", async (req, res) => {
 });
 
 // POST /api/end-party - End party early (host only)
-app.post("/api/end-party", async (req, res) => {
+app.post("/api/end-party", apiLimiter, authMiddleware.optionalAuth, async (req, res) => {
   const timestamp = new Date().toISOString();
   console.log(`[HTTP] POST /api/end-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
   
   try {
-    const { partyCode } = req.body;
+    const { partyCode: _partyCode, code: _code } = req.body;
+    const rawPartyCode = _partyCode || _code;
     
-    if (!partyCode) {
+    if (!rawPartyCode) {
       return res.status(400).json({ error: "Party code is required" });
     }
     
     // Normalize party code
-    const code = partyCode.trim().toUpperCase();
+    const code = normalizePartyCode(rawPartyCode);
     
     // Validate party code length
     if (code.length !== 6) {
@@ -4265,6 +4317,18 @@ app.post("/api/end-party", async (req, res) => {
     
     if (!partyData) {
       return res.status(404).json({ error: "Party not found or expired" });
+    }
+    
+    // Host-only authorization: if party was created by an authenticated user,
+    // require the requester to be that same user
+    if (partyData.hostUserId) {
+      if (!req.user || req.user.userId !== partyData.hostUserId) {
+        const status = !req.user ? 401 : 403;
+        const message = !req.user
+          ? "Authentication required to end this party"
+          : "Only the party host can end the party";
+        return res.status(status).json({ error: message });
+      }
     }
     
     // Mark party as ended
@@ -4309,7 +4373,7 @@ app.post("/api/end-party", async (req, res) => {
       parties.delete(code);
     }
     
-    res.json({ ok: true });
+    res.json({ ok: true, success: true });
     
   } catch (error) {
     console.error(`[HTTP] Error ending party, instanceId: ${INSTANCE_ID}:`, error);
@@ -4317,6 +4381,70 @@ app.post("/api/end-party", async (req, res) => {
       error: "Failed to end party",
       details: error.message 
     });
+  }
+});
+
+// POST /api/party/:code/chat-mode — Set chat mode for a party (host only via hostId)
+app.post("/api/party/:code/chat-mode", apiLimiter, async (req, res) => {
+  const timestamp = new Date().toISOString();
+  const rawCode = req.params.code;
+  console.log(`[HTTP] POST /api/party/${rawCode}/chat-mode at ${timestamp}`, req.body);
+
+  try {
+    const { mode, hostId } = req.body;
+    const validModes = ['OPEN', 'EMOJI_ONLY', 'LOCKED'];
+    if (!mode || !validModes.includes(mode)) {
+      return res.status(400).json({ error: `Invalid mode. Must be one of: ${validModes.join(', ')}` });
+    }
+
+    const code = normalizePartyCode(rawCode);
+    if (code.length !== 6) {
+      return res.status(400).json({ error: "Party code must be 6 characters" });
+    }
+
+    const useRedis = redis && redisReady;
+    if (IS_PRODUCTION && !useRedis) {
+      return res.status(503).json({ error: "Server not ready - Redis unavailable" });
+    }
+
+    let partyData;
+    if (useRedis) {
+      try { partyData = await getPartyFromRedis(code); }
+      catch (e) { partyData = getPartyFromFallback(code); }
+    } else {
+      partyData = getPartyFromFallback(code);
+    }
+
+    if (!partyData) {
+      return res.status(404).json({ error: "Party not found or expired" });
+    }
+
+    // Verify host identity via hostId (body) if party has one, or accept any request
+    if (partyData.hostId !== undefined && hostId !== undefined) {
+      if (String(partyData.hostId) !== String(hostId)) {
+        return res.status(403).json({ error: "Only the party host can change chat mode" });
+      }
+    }
+
+    partyData.chatMode = mode;
+
+    if (useRedis) {
+      try { await setPartyInRedis(code, partyData); }
+      catch (e) { setPartyInFallback(code, partyData); }
+    } else {
+      setPartyInFallback(code, partyData);
+    }
+
+    // Update local in-memory party too
+    const localParty = parties.get(code);
+    if (localParty) {
+      localParty.chatMode = mode;
+    }
+
+    return res.json({ ok: true, chatMode: mode });
+  } catch (error) {
+    console.error(`[HTTP] Error setting chat mode:`, error);
+    return res.status(500).json({ error: "Failed to set chat mode", details: error.message });
   }
 });
 
@@ -5005,7 +5133,7 @@ app.post("/api/party/:code/clear-queue", async (req, res) => {
 app.post("/api/party/:code/reorder-queue", async (req, res) => {
   const timestamp = new Date().toISOString();
   const code = req.params.code ? req.params.code.toUpperCase() : null;
-  const { hostId, fromIndex, toIndex } = req.body;
+  const { hostId, fromIndex, toIndex, newOrder } = req.body;
   
   console.log(`[HTTP] POST /api/party/${code}/reorder-queue at ${timestamp}`);
   
@@ -5013,8 +5141,8 @@ app.post("/api/party/:code/reorder-queue", async (req, res) => {
     return res.status(400).json({ error: 'Invalid party code' });
   }
   
-  if (typeof fromIndex !== 'number' || typeof toIndex !== 'number') {
-    return res.status(400).json({ error: 'fromIndex and toIndex are required and must be numbers' });
+  if (!newOrder && (typeof fromIndex !== 'number' || typeof toIndex !== 'number')) {
+    return res.status(400).json({ error: 'Provide newOrder array or fromIndex+toIndex numbers' });
   }
   
   try {
@@ -5036,18 +5164,31 @@ app.post("/api/party/:code/reorder-queue", async (req, res) => {
       partyData.queue = [];
     }
     
-    // Validate indices
-    if (fromIndex < 0 || fromIndex >= partyData.queue.length) {
-      return res.status(400).json({ error: 'Invalid fromIndex' });
+    // Reorder: use newOrder array if provided, otherwise swap fromIndex/toIndex
+    if (newOrder && Array.isArray(newOrder)) {
+      // newOrder is an array of trackIds specifying the desired order
+      const ordered = [];
+      for (const trackId of newOrder) {
+        const track = partyData.queue.find(t => t.trackId === trackId);
+        if (track) ordered.push(track);
+      }
+      // Append any tracks not mentioned in newOrder (preserve unknown tracks at end)
+      for (const track of partyData.queue) {
+        if (!newOrder.includes(track.trackId)) ordered.push(track);
+      }
+      partyData.queue = ordered;
+    } else {
+      // Validate indices
+      if (fromIndex < 0 || fromIndex >= partyData.queue.length) {
+        return res.status(400).json({ error: 'Invalid fromIndex' });
+      }
+      if (toIndex < 0 || toIndex >= partyData.queue.length) {
+        return res.status(400).json({ error: 'Invalid toIndex' });
+      }
+      // Reorder: remove from fromIndex and insert at toIndex
+      const [movedTrack] = partyData.queue.splice(fromIndex, 1);
+      partyData.queue.splice(toIndex, 0, movedTrack);
     }
-    
-    if (toIndex < 0 || toIndex >= partyData.queue.length) {
-      return res.status(400).json({ error: 'Invalid toIndex' });
-    }
-    
-    // Reorder: remove from fromIndex and insert at toIndex
-    const [movedTrack] = partyData.queue.splice(fromIndex, 1);
-    partyData.queue.splice(toIndex, 0, movedTrack);
     
     // PHASE 3: Persist to storage
     await savePartyState(code, partyData);
@@ -5701,7 +5842,7 @@ app.post('/api/referral/track', apiLimiter, authMiddleware.requireAuth, async (r
  * Returns the list of supported streaming providers.
  * Requires: feature flag ON + Party Pass or Pro tier.
  */
-app.get('/api/streaming/providers', apiLimiter, requireStreamingEnabled, authMiddleware.requireAuth, requireStreamingEntitled, async (req, res) => {
+app.get('/api/streaming/providers', apiLimiter, authMiddleware.requireAuth, requireStreamingEntitled, requireStreamingEnabled, async (req, res) => {
   try {
     return res.json({
       providers: [
@@ -5745,7 +5886,7 @@ app.get('/api/streaming/providers', apiLimiter, requireStreamingEnabled, authMid
  *
  * Body: { partyCode, provider, trackId, title?, artist?, artwork? }
  */
-app.post('/api/streaming/select-track', apiLimiter, requireStreamingEnabled, authMiddleware.requireAuth, requireStreamingEntitled, async (req, res) => {
+app.post('/api/streaming/select-track', apiLimiter, authMiddleware.requireAuth, requireStreamingEntitled, requireStreamingEnabled, async (req, res) => {
   try {
     const { partyCode, provider, trackId, title, artist, artwork } = req.body;
 
@@ -5854,10 +5995,10 @@ app.delete('/api/basket/item/:priceId', apiLimiter, authMiddleware.requireAuth, 
 });
 
 app.post('/api/basket/checkout', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
-  if (!stripeClient) return res.status(503).json({ error: 'Billing not configured. STRIPE_SECRET_KEY is missing.' });
   const userId = req.user.userId;
   const basket = userBaskets.get(userId) || [];
   if (basket.length === 0) return res.status(400).json({ error: 'Basket is empty' });
+  if (!stripeClient) return res.status(503).json({ error: 'Billing not configured. STRIPE_SECRET_KEY is missing.' });
   const hasSubscription = basket.some(p => p === STRIPE_PRICE_PRO_MONTHLY);
   const mode = hasSubscription ? 'subscription' : 'payment';
   try {
@@ -5879,6 +6020,40 @@ app.post('/api/basket/checkout', apiLimiter, authMiddleware.requireAuth, async (
 // ============================================================================
 // STRIPE CHECKOUT SESSION ENDPOINT
 // ============================================================================
+
+// Alias: POST /api/create-checkout-session → /api/stripe/create-checkout-session
+// Accepts { tier } or { priceId, userId } for backward compat with e2e tests
+app.post('/api/create-checkout-session', apiLimiter, authMiddleware.optionalAuth, async (req, res) => {
+  if (!stripeClient) {
+    return res.status(503).json({ error: 'Billing not configured. STRIPE_SECRET_KEY is missing.' });
+  }
+  const { tier, priceId: bodyPriceId, userId: bodyUserId } = req.body;
+  // Resolve priceId from tier alias or direct priceId
+  let priceId = bodyPriceId;
+  if (!priceId && tier) {
+    if (tier === 'PARTY_PASS') priceId = STRIPE_PRICE_PARTY_PASS;
+    else if (tier === 'PRO' || tier === 'PRO_MONTHLY') priceId = STRIPE_PRICE_PRO_MONTHLY;
+  }
+  const userId = bodyUserId || (req.user && req.user.userId);
+  if (!priceId || !userId) {
+    return res.status(400).json({ error: 'priceId/tier and userId are required' });
+  }
+  try {
+    const hasSubscription = priceId === STRIPE_PRICE_PRO_MONTHLY;
+    const mode = hasSubscription ? 'subscription' : 'payment';
+    const session = await stripeClient.checkout.sessions.create({
+      mode,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: STRIPE_SUCCESS_URL,
+      cancel_url: STRIPE_CANCEL_URL,
+      metadata: { userId }
+    });
+    return res.json({ sessionId: session.id, url: session.url, checkoutUrl: session.url });
+  } catch (error) {
+    console.error('[CreateCheckout] Error:', error.message);
+    return res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
 
 /**
  * POST /api/stripe/create-checkout-session
@@ -7916,7 +8091,7 @@ async function handleJoin(ws, msg) {
       console.log(`[WS] Join blocked - Party limit reached, partyCode: ${code}, clientId: ${client.id}, current: ${currentMemberCount}, max: ${maxAllowed}`);
       safeSend(ws, JSON.stringify({ 
         t: "ERROR", 
-        message: maxAllowed === 2 ? "Free parties are limited to 2 phones" : `Party limit reached (${maxAllowed} devices)`
+        message: maxAllowed === 3 ? "Free parties are limited to 3 phones" : `Party limit reached (${maxAllowed} devices)`
       }));
       return;
     }
