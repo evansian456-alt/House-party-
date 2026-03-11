@@ -334,7 +334,7 @@ test.describe('Full UI Journey — Signup → Party → Chat → Purchase → Lo
     }
 
     // Guest should enter party view or guest view
-    await expect(guestPage.locator('#viewParty, #viewGuest')).toBeVisible({ timeout: 15_000 });
+    await guestPage.waitForSelector('#viewParty:not(.hidden), #viewGuest:not(.hidden)', { timeout: 15_000 });
     await screenshot(guestPage, '13_guest_joined_party');
 
     await guestCtx.close();

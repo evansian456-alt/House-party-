@@ -96,7 +96,11 @@ test.describe('Auth error flow', () => {
     expect(signupRes.ok()).toBeTruthy();
 
     await page.goto(BASE);
+    // Wait for the landing view to be fully visible before clicking (avoids initAuthFlow race)
+    await page.waitForSelector('#viewLanding', { state: 'visible', timeout: 10000 });
     await page.locator('[data-testid="login-button"]').click();
+    // Wait for login view to be visible before filling the form
+    await page.waitForSelector('#viewLogin', { state: 'visible', timeout: 8000 });
     await page.locator('#loginEmail').waitFor({ state: 'visible', timeout: 5000 });
 
     await page.locator('#loginEmail').fill(user.email);
