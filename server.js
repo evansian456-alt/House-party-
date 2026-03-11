@@ -5754,24 +5754,33 @@ app.post('/api/streaming/select-track', apiLimiter, requireStreamingEnabled, aut
     }
 
     const validProviders = ['youtube', 'spotify', 'soundcloud'];
-    if (!validProviders.includes((provider || '').toLowerCase())) {
+    const providerLower = (provider || '').toLowerCase();
+    if (!validProviders.includes(providerLower)) {
       return res.status(400).json({ error: `Invalid provider. Must be one of: ${validProviders.join(', ')}` });
     }
 
-    // Build deep link
-    const providerLower = provider.toLowerCase();
+    // Normalize trackId using platform normalizer (handles URLs, URIs, raw IDs)
+    let normalizedId;
+    try {
+      normalizedId = normalizePlatformTrackRef(providerLower, trackId);
+    } catch (err) {
+      return res.status(400).json({ error: `Invalid trackId for ${providerLower}: ${err.message}` });
+    }
+
+    // Build deep link from the normalized ID
     let deepLink;
     if (providerLower === 'youtube') {
-      deepLink = `https://www.youtube.com/watch?v=${encodeURIComponent(trackId)}`;
+      deepLink = `https://www.youtube.com/watch?v=${encodeURIComponent(normalizedId)}`;
     } else if (providerLower === 'spotify') {
-      deepLink = `spotify:track:${trackId}`;
+      // normalizedId is already "spotify:track:XXX"
+      deepLink = normalizedId;
     } else {
-      deepLink = trackId; // SoundCloud uses the full URL as trackId
+      deepLink = normalizedId; // SoundCloud: numeric ID or canonical URL
     }
 
     const trackDescriptor = {
       source: providerLower,
-      id: trackId,
+      id: normalizedId,
       title: title || null,
       artist: artist || null,
       artwork: artwork || null,
@@ -5782,6 +5791,79 @@ app.post('/api/streaming/select-track', apiLimiter, requireStreamingEnabled, aut
   } catch (error) {
     console.error('[StreamingParty] Select track error:', error.message);
     return res.status(500).json({ error: 'Failed to select track' });
+  }
+});
+
+/**
+ * GET /api/streaming/search
+ * Search for tracks on a streaming provider.
+ * Currently supports provider=youtube using the YouTube Data API v3.
+ * Falls back to an empty result set when YOUTUBE_API_KEY is not configured
+ * so the endpoint remains functional in test / CI environments.
+ *
+ * Query params: provider (required), q (required)
+ */
+app.get('/api/streaming/search', apiLimiter, requireStreamingEnabled, authMiddleware.requireAuth, requireStreamingEntitled, async (req, res) => {
+  try {
+    const provider = (req.query.provider || '').toLowerCase();
+    const q = (req.query.q || '').trim();
+
+    if (!provider || !q) {
+      return res.status(400).json({ error: 'provider and q query parameters are required' });
+    }
+
+    if (provider !== 'youtube') {
+      return res.status(400).json({ error: `Search is not supported for provider "${provider}". Only youtube is supported.` });
+    }
+
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      // Return empty results when API key is not configured (CI / local dev)
+      return res.json({ provider: 'youtube', results: [], warning: 'YOUTUBE_API_KEY not configured' });
+    }
+
+    // Call YouTube Data API v3 search endpoint
+    const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
+    searchUrl.searchParams.set('part', 'snippet');
+    searchUrl.searchParams.set('type', 'video');
+    searchUrl.searchParams.set('maxResults', '10');
+    searchUrl.searchParams.set('q', q);
+    searchUrl.searchParams.set('key', apiKey);
+
+    const https = require('https');
+    const rawBody = await new Promise((resolve, reject) => {
+      https.get(searchUrl.toString(), (resp) => {
+        let data = '';
+        resp.on('data', chunk => { data += chunk; });
+        resp.on('end', () => resolve(data));
+        resp.on('error', reject);
+      }).on('error', reject);
+    });
+
+    const ytResponse = JSON.parse(rawBody);
+
+    if (ytResponse.error) {
+      console.error('[StreamingSearch] YouTube API error:', ytResponse.error.message);
+      return res.status(502).json({ error: 'YouTube search failed', detail: ytResponse.error.message });
+    }
+
+    const results = (ytResponse.items || []).map(item => {
+      const videoId = item.id && item.id.videoId ? item.id.videoId : null;
+      if (!videoId) return null;
+      const snippet = item.snippet || {};
+      return {
+        id: videoId,
+        title: snippet.title || '',
+        artist: snippet.channelTitle || '',
+        artwork: (snippet.thumbnails && snippet.thumbnails.default && snippet.thumbnails.default.url) || null,
+        deepLink: `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`
+      };
+    }).filter(Boolean);
+
+    return res.json({ provider: 'youtube', results });
+  } catch (error) {
+    console.error('[StreamingSearch] Search error:', error.message);
+    return res.status(500).json({ error: 'Search failed' });
   }
 });
 
@@ -7996,6 +8078,25 @@ async function handleJoin(ws, msg) {
         currentTrack: party.currentTrack,
         queue: party.queue || [],
         serverTime: Date.now()
+      }));
+    }
+
+    // Replay current Official App Sync track state to late-joining client
+    if (party.officialAppSync && party.officialAppSync.trackRef) {
+      const sync = party.officialAppSync;
+      const serverNowMs = Date.now();
+      // Recalculate current playback position so guest syncs from the right spot
+      const currentPositionSeconds = sync.playing && sync.playStartedAtMs
+        ? Math.max(0, (serverNowMs - sync.playStartedAtMs) / 1000)
+        : (sync.seekOffsetSeconds || 0);
+      safeSend(ws, JSON.stringify({
+        t: 'TRACK_SELECTED',
+        mode: 'OFFICIAL_APP_SYNC',
+        platform: sync.platform,
+        trackRef: sync.trackRef,
+        serverTimestampMs: serverNowMs,
+        positionSeconds: currentPositionSeconds,
+        playing: sync.playing
       }));
     }
     

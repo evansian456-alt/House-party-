@@ -12222,6 +12222,22 @@ function handleOfficialAppSyncTrackSelected(msg) {
     if (isMobileDevice()) {
       attemptMobileAutoLaunch(links.deepLink, links.webUrl);
     }
+
+    // Fire streamingPartyTrackSelected event so Sync Coach activates for guests.
+    // playbackStartMs is when playback began: serverTimestamp minus already-elapsed positionSeconds.
+    var elapsedMs = (msg.positionSeconds || 0) * 1000;
+    var playbackStartMs = msg.serverTimestampMs
+      ? msg.serverTimestampMs - elapsedMs
+      : Date.now() - elapsedMs;
+    _streamingPartyState.playbackStartMs = playbackStartMs;
+    document.dispatchEvent(new CustomEvent('streamingPartyTrackSelected', {
+      detail: {
+        platform: platform,
+        trackRef: trackRef,
+        playbackStartMs: playbackStartMs,
+        playing: msg.playing !== false
+      }
+    }));
   }
 
   toast(`🎵 Official App Sync: ${platform} track synced`);
