@@ -37,7 +37,7 @@ const TEST_PRICE_PRO = process.env.STRIPE_PRICE_PRO_MONTHLY || 'price_pro_monthl
 test.describe('Basket — add / remove', () => {
   let user;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     user = makeUser();
     await signupAndLogin(request, user);
   });
@@ -108,7 +108,7 @@ test.describe('Basket — add / remove', () => {
 test.describe('Basket — checkout session', () => {
   let user;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     user = makeUser('checkout');
     await signupAndLogin(request, user);
   });

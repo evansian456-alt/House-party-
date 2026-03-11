@@ -85,6 +85,7 @@ test.describe('Signup view', () => {
     await page.fill('#signupEmail', u.email);
     await page.fill('#signupPassword', u.password);
     await page.fill('#signupDjName', u.djName);
+    await page.check('#signupTermsAccept');
     await page.click('#viewSignup button[type="submit"]');
 
     // Should navigate away from signup
@@ -101,8 +102,9 @@ test.describe('Signup view', () => {
 
     await page.fill('#signupEmail', `missing_dj_${uid()}@test.invalid`);
     await page.fill('#signupPassword', 'Pass123!');
-    // intentionally leave djName empty
-    await page.click('#viewSignup button[type="submit"]');
+    // intentionally leave djName empty — submit form bypassing HTML5 validation
+    // to test the JS-level error message
+    await page.evaluate(() => document.getElementById('formSignup').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
 
     // Error should appear
     const err = page.locator('#signupError');
@@ -293,6 +295,7 @@ test.describe('Logout', () => {
     }
 
     // /api/me should be 401 after logout
+    await request.post(`${BASE}/api/auth/logout`);
     const meRes = await request.get(`${BASE}/api/me`);
     expect(meRes.status()).toBe(401);
   });

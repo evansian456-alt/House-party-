@@ -38,7 +38,7 @@ async function apiLogin(request, user) {
 test.describe('Host party flow', () => {
   let host;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     host = makeUser('host');
     await apiSignup(request, host);
     await apiLogin(request, host);

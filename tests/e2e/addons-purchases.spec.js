@@ -269,7 +269,7 @@ test.describe('Add-on purchases — profile upgrades', () => {
 test.describe('Add-on UI state consistency', () => {
   let user;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     user = makeUser('uistate');
     await signupAndLogin(request, user);
   });
