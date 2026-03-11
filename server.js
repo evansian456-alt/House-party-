@@ -3227,6 +3227,7 @@ function buildPartyResponseObject(code, status, partyData, PARTY_TTL_MS_ref) {
     status,
     ended: status === "ended",
     guestCount: partyData.guestCount || 0,
+    djName: partyData.djName || "DJ",
     chatMode: partyData.chatMode || "OPEN",
     createdAt: partyData.createdAt,
     expiresAt: partyData.expiresAt || (partyData.createdAt + PARTY_TTL_MS_ref),
@@ -3888,7 +3889,8 @@ app.post("/api/join-party", async (req, res) => {
       nickname: guestNickname,
       partyCode: code,
       djName: partyData.djName || "DJ", // Fallback for backward compatibility with old parties
-      chatMode: partyData.chatMode || "OPEN" // Include chat mode for initial setup
+      chatMode: partyData.chatMode || "OPEN", // Include chat mode for initial setup
+      party: buildPartyResponseObject(code, partyData.status || "active", partyData, PARTY_TTL_MS)
     };
     
     // Add warning if using fallback mode in production
@@ -4164,9 +4166,11 @@ app.post("/api/leave-party", async (req, res) => {
   console.log(`[HTTP] POST /api/leave-party at ${timestamp}, instanceId: ${INSTANCE_ID}`, req.body);
   
   try {
-    const { partyCode, guestId } = req.body;
-    
-    if (!partyCode) {
+    const { partyCode: partyCodeField, code: codeField, guestId } = req.body;
+    // Accept either 'code' or 'partyCode' field for backward compatibility
+    const rawPartyCode = partyCodeField || codeField;
+
+    if (!rawPartyCode) {
       return res.status(400).json({ error: "Party code is required" });
     }
     
@@ -4175,7 +4179,7 @@ app.post("/api/leave-party", async (req, res) => {
     }
     
     // Normalize party code
-    const code = partyCode.trim().toUpperCase();
+    const code = normalizePartyCode(rawPartyCode);
     
     // Validate party code length
     if (code.length !== 6) {
@@ -4233,7 +4237,8 @@ app.post("/api/leave-party", async (req, res) => {
     }
     
     res.json({ 
-      ok: true, 
+      ok: true,
+      success: true,
       guestCount: partyData.guestCount 
     });
     
