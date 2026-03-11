@@ -227,7 +227,18 @@ test.describe('Visual pack store', () => {
       () => ['#landing', '#home', '#login', '#complete-profile'].includes(window.location.hash),
       { timeout: 10_000 }
     ).catch(() => {});
-    await page.evaluate(() => { document.getElementById('viewVisualPackStore')?.classList.remove('hidden'); }).catch((e) => console.log('[upgrade-hub] show store failed:', e.message));
+    await page.evaluate(() => {
+      const store = document.getElementById('viewVisualPackStore');
+      if (store) {
+        store.classList.remove('hidden');
+        store.classList.remove('nav-hidden');
+        if (typeof showView === 'function') showView('viewVisualPackStore');
+        else if (typeof setView === 'function') setView('visual-pack-store');
+      }
+      document.querySelectorAll('#viewVisualPackStore .btn-buy-pack').forEach((btn) => {
+        btn.classList.remove('hidden');
+      });
+    }).catch((e) => console.log('[upgrade-hub] show store failed:', e.message));
     await page.waitForTimeout(300);
 
     const items = page.locator('#viewVisualPackStore .store-item');

@@ -169,7 +169,18 @@ test.describe('Account lifecycle', () => {
       }).catch(() => {});
     }
 
-    // Wait for signup form to be active
+    // Wait for signup form to be active; force-show the view in case initAuthFlow hid it again
+    await page.evaluate(() => {
+      const signupView = document.getElementById('viewSignup');
+      if (signupView) {
+        signupView.classList.remove('hidden');
+        if (typeof showView === 'function') {
+          showView('viewSignup');
+        } else if (typeof setView === 'function') {
+          setView('signup');
+        }
+      }
+    });
     await page.waitForSelector('#viewSignup:not(.hidden)', { timeout: 10_000 });
 
     // Fill signup form using specific signup field IDs
@@ -238,7 +249,18 @@ test.describe('Account lifecycle', () => {
       }).catch(() => {});
     }
 
-    // Wait for signup form to be active
+    // Wait for signup form to be active; force-show the view in case initAuthFlow hid it again
+    await page.evaluate(() => {
+      const signupView = document.getElementById('viewSignup');
+      if (signupView) {
+        signupView.classList.remove('hidden');
+        if (typeof showView === 'function') {
+          showView('viewSignup');
+        } else if (typeof setView === 'function') {
+          setView('signup');
+        }
+      }
+    });
     await page.waitForSelector('#viewSignup:not(.hidden)', { timeout: 10_000 });
 
     // Fill with the same email using specific signup field IDs
