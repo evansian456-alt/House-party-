@@ -142,7 +142,7 @@ test.describe('Store catalog — information accuracy', () => {
 test.describe('Add-on purchases — visual pack', () => {
   let user;
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeEach(async ({ request }) => {
     user = makeUser('visual');
     await signupAndLogin(request, user);
   });

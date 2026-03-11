@@ -218,8 +218,8 @@ test.describe('Visual pack store', () => {
 
   test('each visual pack has BUY button and hidden Activate button initially', async ({ page }) => {
     await page.goto(BASE);
-    await page.waitForLoadState('domcontentloaded');
-    await page.evaluate(() => { document.getElementById('viewVisualPackStore')?.classList.remove('hidden'); });
+    await page.waitForLoadState('load');
+    await page.evaluate(() => { document.getElementById('viewVisualPackStore')?.classList.remove('hidden'); }).catch((e) => console.log('[upgrade-hub] show store failed:', e.message));
     await page.waitForTimeout(300);
 
     const items = page.locator('#viewVisualPackStore .store-item');

@@ -5954,10 +5954,10 @@ app.delete('/api/basket/item/:priceId', apiLimiter, authMiddleware.requireAuth, 
 });
 
 app.post('/api/basket/checkout', apiLimiter, authMiddleware.requireAuth, async (req, res) => {
-  if (!stripeClient) return res.status(503).json({ error: 'Billing not configured. STRIPE_SECRET_KEY is missing.' });
   const userId = req.user.userId;
   const basket = userBaskets.get(userId) || [];
   if (basket.length === 0) return res.status(400).json({ error: 'Basket is empty' });
+  if (!stripeClient) return res.status(503).json({ error: 'Billing not configured. STRIPE_SECRET_KEY is missing.' });
   const hasSubscription = basket.some(p => p === STRIPE_PRICE_PRO_MONTHLY);
   const mode = hasSubscription ? 'subscription' : 'payment';
   try {

@@ -92,14 +92,20 @@ test.describe('Music queue — host operations', () => {
   });
 
   test('party-state queue matches after adding track — UI/backend consistency', async ({ request }) => {
+    // Add a track first — each test gets a fresh party from beforeEach
+    const track = makeTrack(1);
+    await request.post(`${BASE}/api/party/${party.code}/queue-track`, {
+      data: { ...track, hostId: party.hostId },
+    });
+
     const stateRes = await request.get(`${BASE}/api/party-state?code=${party.code}`);
     const state = await stateRes.json();
     expect(state.queue.length).toBeGreaterThan(0);
 
     // The queued track should appear in the party state
-    const track = state.queue[0];
-    expect(track.trackId).toBeDefined();
-    expect(track.title).toBeDefined();
+    const queuedTrack = state.queue[0];
+    expect(queuedTrack.trackId).toBeDefined();
+    expect(queuedTrack.title).toBeDefined();
   });
 
   test('host can queue multiple tracks (up to limit)', async ({ request }) => {
@@ -271,10 +277,9 @@ test.describe('Music queue reorder', () => {
     if (state.queue.length < 2) return; // not enough tracks
 
     const originalOrder = state.queue.map((t) => t.trackId);
-    const reversed = [...originalOrder].reverse();
-
+    // Move the first track to position 1 (swap first two), using the fromIndex/toIndex API
     const reorderRes = await request.post(`${BASE}/api/party/${party3.code}/reorder-queue`, {
-      data: { newOrder: reversed, hostId: party3.hostId },
+      data: { fromIndex: 0, toIndex: 1, hostId: party3.hostId },
     });
     expect(reorderRes.ok()).toBeTruthy();
 
@@ -282,7 +287,8 @@ test.describe('Music queue reorder', () => {
     const afterRes = await request.get(`${BASE}/api/party-state?code=${party3.code}`);
     const after = await afterRes.json();
     if (after.queue.length >= 2) {
-      expect(after.queue[0].trackId).toBe(reversed[0]);
+      // After moving track from index 0 to 1, the second original track is now first
+      expect(after.queue[0].trackId).toBe(originalOrder[1]);
     }
   });
 });

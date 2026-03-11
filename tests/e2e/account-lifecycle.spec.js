@@ -150,12 +150,7 @@ test.describe('Account lifecycle', () => {
     const freshUser = makeUser();
 
     await page.goto(BASE);
-
-    // Collect console errors for diagnostics
-    const consoleErrors = [];
-    page.on('console', (msg) => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text());
-    });
+    await page.waitForSelector('#viewLanding, #viewLogin, #viewAuthHome', { timeout: 10_000 }).catch((e) => console.log('[lifecycle] view wait timed out:', e.message));
 
     // Navigate to signup view
     const signupBtn = page
@@ -167,14 +162,17 @@ test.describe('Account lifecycle', () => {
     } else {
       await page.evaluate(() => {
         if (typeof setView === 'function') setView('signup');
-      });
+      }).catch(() => {});
     }
 
-    // Fill signup form
-    const emailField = page.locator('input[type="email"], input[id="signupEmail"]').first();
+    // Wait for signup form to be active
+    await page.waitForSelector('#signupEmail', { state: 'visible', timeout: 8_000 }).catch((e) => console.log('[lifecycle] signup form wait timed out:', e.message));
+
+    // Fill signup form using specific signup field IDs
+    const emailField = page.locator('#signupEmail');
     await emailField.fill(freshUser.email);
 
-    const passwordField = page.locator('input[type="password"], input[id="signupPassword"]').first();
+    const passwordField = page.locator('#signupPassword');
     await passwordField.fill(freshUser.password);
 
     const djNameField = page
@@ -203,10 +201,6 @@ test.describe('Account lifecycle', () => {
     try {
       await expect(successMsgLocator).toContainText('Welcome to the party 🥳', { timeout: 10000 });
     } catch (err) {
-      // Capture diagnostics before failing
-      if (consoleErrors.length > 0) {
-        console.log('[lifecycle][UI] console errors:', consoleErrors.join('\n'));
-      }
       await page.screenshot({ path: '/tmp/lifecycle-signup-failure.png' }).catch(() => {});
       console.log('[lifecycle][UI] screenshot saved to /tmp/lifecycle-signup-failure.png');
       throw err;
@@ -227,6 +221,7 @@ test.describe('Account lifecycle', () => {
     });
 
     await page.goto(BASE);
+    await page.waitForSelector('#viewLanding, #viewLogin, #viewAuthHome', { timeout: 10_000 }).catch((e) => console.log('[lifecycle] view wait timed out:', e.message));
 
     // Navigate to signup view
     const signupBtn = page
@@ -238,14 +233,17 @@ test.describe('Account lifecycle', () => {
     } else {
       await page.evaluate(() => {
         if (typeof setView === 'function') setView('signup');
-      });
+      }).catch(() => {});
     }
 
-    // Fill with the same email
-    const emailField = page.locator('input[type="email"], input[id="signupEmail"]').first();
+    // Wait for signup form to be active
+    await page.waitForSelector('#signupEmail', { state: 'visible', timeout: 8_000 }).catch((e) => console.log('[lifecycle] signup form wait timed out:', e.message));
+
+    // Fill with the same email using specific signup field IDs
+    const emailField = page.locator('#signupEmail');
     await emailField.fill(dupUser.email);
 
-    const passwordField = page.locator('input[type="password"], input[id="signupPassword"]').first();
+    const passwordField = page.locator('#signupPassword');
     await passwordField.fill(dupUser.password);
 
     const djNameField = page.locator('input[name="djName"], input[id="signupDjName"]').first();

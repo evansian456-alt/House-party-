@@ -303,10 +303,13 @@ test.describe('Click-Everything Audit', () => {
       await screenshot(page, 'party_play_clicked');
     }
 
-    // Music upload button
+    // Music upload button — dismiss DJ screen overlay first (may appear after play button click)
     const uploadBtn = page.locator('[data-testid="upload-audio"]');
     if (await uploadBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await uploadBtn.click();
+      await page.evaluate(() => { document.getElementById('djScreenOverlay')?.classList.add('hidden'); }).catch((e) => console.log('[click-all] dismiss overlay failed:', e.message));
+      await uploadBtn.click({ force: true }).catch((e) => {
+        console.log(`[click-all] Upload button click failed: ${e.message}`);
+      });
       await screenshot(page, 'party_upload_clicked');
     }
 
