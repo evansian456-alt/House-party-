@@ -4084,7 +4084,6 @@ app.get("/api/party-state", async (req, res) => {
     console.log(`[HTTP] Party state: ${code}, status: ${status}, track: ${currentTrack?.filename || currentTrack?.title || 'none'}, queue length: ${queue.length}`);
     
     // Return enhanced party state with playback info
-    // Return flat fields for test compatibility
     const tierInfo = {
       tier: partyData.tier || null,
       partyPassExpiresAt: partyData.partyPassExpiresAt || null,
