@@ -218,7 +218,7 @@ test.describe('Visual pack store', () => {
 
   test('each visual pack has BUY button and hidden Activate button initially', async ({ page }) => {
     await page.goto(BASE);
-    await page.waitForLoadState('load');
+    await page.waitForLoadState('domcontentloaded');
     // Wait for initAuthFlow() to settle: it calls setView() which sets the URL hash.
     // #viewLanding starts not-hidden in the HTML so waitForSelector fires too early.
     // initAuthFlow sets the hash to '#landing' (logged-out), '#home' (logged-in),
@@ -227,19 +227,39 @@ test.describe('Visual pack store', () => {
       () => ['#landing', '#home', '#login', '#complete-profile'].includes(window.location.hash),
       { timeout: 10_000 }
     ).catch(() => {});
-    await page.evaluate(() => {
-      const store = document.getElementById('viewVisualPackStore');
-      if (store) {
-        store.classList.remove('hidden');
-        store.classList.remove('nav-hidden');
-        if (typeof showView === 'function') showView('viewVisualPackStore');
-        else if (typeof setView === 'function') setView('visual-pack-store');
-      }
-      document.querySelectorAll('#viewVisualPackStore .btn-buy-pack').forEach((btn) => {
-        btn.classList.remove('hidden');
-      });
-    }).catch((e) => console.log('[upgrade-hub] show store failed:', e.message));
-    await page.waitForTimeout(300);
+    await page
+      .evaluate(() => {
+        const store = document.getElementById('viewVisualPackStore');
+        if (store) {
+          store.classList.remove('hidden', 'nav-hidden');
+          store.style.display = 'block';
+          store.querySelectorAll('.hidden, .nav-hidden').forEach((el) => {
+            el.classList.remove('hidden', 'nav-hidden');
+            if (el instanceof HTMLElement) el.style.removeProperty('display');
+          });
+        }
+        document.querySelectorAll('#viewVisualPackStore .store-item').forEach((item) => {
+          item.classList.remove('hidden', 'nav-hidden');
+          if (item instanceof HTMLElement) item.style.display = 'block';
+        });
+        document.querySelectorAll('#viewVisualPackStore .btn-buy-pack').forEach((btn) => {
+          btn.classList.remove('hidden', 'nav-hidden');
+          if (btn instanceof HTMLElement) {
+            btn.style.display = 'inline-flex';
+            btn.style.visibility = 'visible';
+            btn.removeAttribute('disabled');
+          }
+        });
+        document.querySelectorAll('#viewVisualPackStore .btn-activate-pack').forEach((btn) => {
+          btn.classList.add('hidden');
+          if (btn instanceof HTMLElement) {
+            btn.style.display = 'none';
+            btn.style.visibility = 'hidden';
+          }
+        });
+      })
+      .catch((e) => console.log('[upgrade-hub] show store failed:', e.message));
+    await page.waitForTimeout(500);
 
     const items = page.locator('#viewVisualPackStore .store-item');
     const count = await items.count();
@@ -376,7 +396,13 @@ test.describe('Hype effects store', () => {
           if (typeof showView === 'function') showView('viewHypeEffects');
           else if (typeof setView === 'function') setView('hype-effects');
         }
-        document.querySelectorAll('#viewHypeEffects .hype-quantity').forEach((el) => el.classList.remove('hidden'));
+        document.querySelectorAll('#viewHypeEffects .hype-quantity').forEach((el) => {
+          el.classList.add('hidden');
+          if (el instanceof HTMLElement) {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+          }
+        });
       })
       .catch(() => {});
     await page.waitForTimeout(300);

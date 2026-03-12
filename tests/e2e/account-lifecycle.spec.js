@@ -149,14 +149,14 @@ test.describe('Account lifecycle', () => {
   test('UI shows "Welcome to the party 🥳" on successful signup', async ({ page }) => {
     const freshUser = makeUser();
 
-    await page.goto(BASE);
+    await page.goto(`${BASE}/#signup`);
     await page.waitForLoadState('load');
     // Wait for initAuthFlow to settle: it calls setView() which sets the URL hash.
     // #viewLanding starts not-hidden in the HTML, so waitForSelector fires too early.
     // initAuthFlow sets the hash to '#landing' (logged-out), '#home' (logged-in),
     // '#complete-profile', or '#login' depending on auth state.
     await page.waitForFunction(
-      () => ['#landing', '#home', '#login', '#complete-profile'].includes(window.location.hash),
+      () => ['#landing', '#home', '#login', '#complete-profile', '#signup'].includes(window.location.hash),
       { timeout: 10_000 }
     ).catch((e) => console.log('[lifecycle] auth-flow settle timed out:', e.message));
 
@@ -174,11 +174,29 @@ test.describe('Account lifecycle', () => {
     await page.evaluate(() => {
       const signupView = document.getElementById('viewSignup');
       if (signupView) {
-        signupView.classList.remove('hidden');
+        signupView.classList.remove('hidden', 'nav-hidden');
+        signupView.removeAttribute('hidden');
+        signupView.style.display = 'block';
+        signupView.style.visibility = 'visible';
+        const form = signupView.querySelector('form');
+        if (form instanceof HTMLElement) {
+          form.classList.remove('hidden', 'nav-hidden');
+          form.style.display = 'block';
+          form.style.visibility = 'visible';
+        }
+        signupView.querySelectorAll('.hidden, .nav-hidden').forEach((el) => {
+          el.classList.remove('hidden', 'nav-hidden');
+          if (el instanceof HTMLElement) {
+            el.style.removeProperty('display');
+            el.style.visibility = 'visible';
+          }
+        });
         if (typeof showView === 'function') {
           showView('viewSignup');
         } else if (typeof setView === 'function') {
           setView('signup');
+        } else {
+          window.location.hash = '#signup';
         }
       }
     });
@@ -244,14 +262,14 @@ test.describe('Account lifecycle', () => {
       },
     });
 
-    await page.goto(BASE);
+    await page.goto(`${BASE}/#signup`);
     await page.waitForLoadState('load');
     // Wait for initAuthFlow to settle: it calls setView() which sets the URL hash.
     // #viewLanding starts not-hidden in the HTML, so waitForSelector fires too early.
     // initAuthFlow sets the hash to '#landing' (logged-out), '#home' (logged-in),
     // '#complete-profile', or '#login' depending on auth state.
     await page.waitForFunction(
-      () => ['#landing', '#home', '#login', '#complete-profile'].includes(window.location.hash),
+      () => ['#landing', '#home', '#login', '#complete-profile', '#signup'].includes(window.location.hash),
       { timeout: 10_000 }
     ).catch((e) => console.log('[lifecycle] auth-flow settle timed out:', e.message));
 
@@ -269,11 +287,29 @@ test.describe('Account lifecycle', () => {
     await page.evaluate(() => {
       const signupView = document.getElementById('viewSignup');
       if (signupView) {
-        signupView.classList.remove('hidden');
+        signupView.classList.remove('hidden', 'nav-hidden');
+        signupView.removeAttribute('hidden');
+        signupView.style.display = 'block';
+        signupView.style.visibility = 'visible';
+        const form = signupView.querySelector('form');
+        if (form instanceof HTMLElement) {
+          form.classList.remove('hidden', 'nav-hidden');
+          form.style.display = 'block';
+          form.style.visibility = 'visible';
+        }
+        signupView.querySelectorAll('.hidden, .nav-hidden').forEach((el) => {
+          el.classList.remove('hidden', 'nav-hidden');
+          if (el instanceof HTMLElement) {
+            el.style.removeProperty('display');
+            el.style.visibility = 'visible';
+          }
+        });
         if (typeof showView === 'function') {
           showView('viewSignup');
         } else if (typeof setView === 'function') {
           setView('signup');
+        } else {
+          window.location.hash = '#signup';
         }
       }
     });
@@ -306,8 +342,8 @@ test.describe('Account lifecycle', () => {
       .evaluate(() => {
         const view = document.getElementById('viewSignup');
         if (view) {
-          view.classList.remove('hidden');
-          view.classList.remove('nav-hidden');
+          view.classList.remove('hidden', 'nav-hidden');
+          view.querySelectorAll('.hidden, .nav-hidden').forEach((el) => el.classList.remove('hidden', 'nav-hidden'));
           if (typeof showView === 'function') showView('viewSignup');
           else if (typeof setView === 'function') setView('signup');
         }
