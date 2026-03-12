@@ -4096,8 +4096,8 @@ app.get("/api/party-state", async (req, res) => {
       title: currentTrack.title,
       durationMs: currentTrack.durationMs,
       startAtServerMs: currentTrack.startAtServerMs,
-      startPosition: currentTrack.startPosition || currentTrack.startPositionSec,
-      startPositionSec: currentTrack.startPositionSec || currentTrack.startPosition,
+      startPosition: currentTrack.startPosition ?? currentTrack.startPositionSec,
+      startPositionSec: currentTrack.startPositionSec ?? currentTrack.startPosition,
       status: currentTrack.status || 'playing',
       pausedPositionSec: currentTrack.pausedPositionSec,
       pausedAtServerMs: currentTrack.pausedAtServerMs
@@ -5834,20 +5834,41 @@ app.get('/api/streaming/search', apiLimiter, requireStreamingEnabled, authMiddle
     searchUrl.searchParams.set('key', apiKey);
 
     const https = require('https');
-    const rawBody = await new Promise((resolve, reject) => {
-      https.get(searchUrl.toString(), (resp) => {
-        let data = '';
-        resp.on('data', chunk => { data += chunk; });
-        resp.on('end', () => resolve(data));
-        resp.on('error', reject);
-      }).on('error', reject);
-    });
+    let rawBody;
+    try {
+      rawBody = await new Promise((resolve, reject) => {
+        const req = https.get(searchUrl.toString(), (resp) => {
+          if (resp.statusCode && (resp.statusCode < 200 || resp.statusCode >= 300)) {
+            resp.resume();
+            return reject(new Error(`YouTube API responded with status ${resp.statusCode}`));
+          }
+          let data = '';
+          resp.on('data', chunk => { data += chunk; });
+          resp.on('end', () => resolve(data));
+          resp.on('error', reject);
+        });
+        req.on('error', reject);
+        req.setTimeout(10000, () => {
+          req.destroy(new Error('Request to YouTube API timed out'));
+        });
+      });
+    } catch (err) {
+      console.error('[StreamingSearch] Error calling YouTube API:', err.message);
+      return res.status(502).json({ error: 'YouTube search failed', detail: 'Error calling YouTube API' });
+    }
 
-    const ytResponse = JSON.parse(rawBody);
+    let ytResponse;
+    try {
+      ytResponse = JSON.parse(rawBody);
+    } catch (err) {
+      console.error('[StreamingSearch] Failed to parse YouTube API response as JSON:', err.message);
+      return res.status(502).json({ error: 'YouTube search failed', detail: 'Invalid response from YouTube API' });
+    }
 
     if (ytResponse.error) {
-      console.error('[StreamingSearch] YouTube API error:', ytResponse.error.message);
-      return res.status(502).json({ error: 'YouTube search failed', detail: ytResponse.error.message });
+      const message = ytResponse.error.message || 'Unknown error from YouTube API';
+      console.error('[StreamingSearch] YouTube API error:', message);
+      return res.status(502).json({ error: 'YouTube search failed', detail: message });
     }
 
     const results = (ytResponse.items || []).map(item => {

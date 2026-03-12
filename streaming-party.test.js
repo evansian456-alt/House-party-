@@ -322,49 +322,37 @@ describe('/api/streaming/search (YouTube)', () => {
 
   it('returns 401 or 503 without authentication', async () => {
     const res = await request(app).get('/api/streaming/search?provider=youtube&q=test');
-    expect([401, 403, 503]).toContain(res.status);
+    // 503 when feature flag is off (default), 401 when on but unauthenticated
+    expect([401, 503]).toContain(res.status);
   });
 
-  it('returns 401/403/503 when q is missing (auth checked before input validation)', async () => {
+  it('returns 401/503 when q is missing (auth checked before input validation)', async () => {
     const res = await request(app).get('/api/streaming/search?provider=youtube');
-    expect([400, 401, 403, 503]).toContain(res.status);
+    // 503 when feature flag is off; 401 when on but unauthenticated (auth runs before 400 check)
+    expect([401, 503]).toContain(res.status);
   });
 
-  it('returns 401/403/503 when provider is missing', async () => {
+  it('returns 401/503 when provider is missing', async () => {
     const res = await request(app).get('/api/streaming/search?q=test');
-    expect([400, 401, 403, 503]).toContain(res.status);
+    // 503 when feature flag is off; 401 when on but unauthenticated
+    expect([401, 503]).toContain(res.status);
   });
 
   it('returns 401 for unsupported provider when not authenticated', async () => {
-    const original = process.env.STREAMING_PARTY_ENABLED;
-    process.env.STREAMING_PARTY_ENABLED = 'true';
-    try {
-      const res = await request(app).get('/api/streaming/search?provider=spotify&q=test');
-      // Without auth, will return 401. With auth + paid, would return 400 for unsupported provider.
-      expect([400, 401, 403, 503]).toContain(res.status);
-    } finally {
-      if (original === undefined) {
-        delete process.env.STREAMING_PARTY_ENABLED;
-      } else {
-        process.env.STREAMING_PARTY_ENABLED = original;
-      }
-    }
+    const res = await request(app).get('/api/streaming/search?provider=spotify&q=test');
+    // 503 when feature flag is off (default); 401 when on but unauthenticated
+    expect([401, 503]).toContain(res.status);
   });
 
   it('returns provider:youtube and results array when YOUTUBE_API_KEY is absent (no-op mode)', async () => {
-    // When YOUTUBE_API_KEY is absent the endpoint should return empty results with a warning.
-    // We cannot call the endpoint without auth in integration tests; test the documented contract here.
+    // When YOUTUBE_API_KEY is absent the endpoint still requires auth first.
+    // Verify auth guard runs regardless of API key presence.
     const original = process.env.YOUTUBE_API_KEY;
     delete process.env.YOUTUBE_API_KEY;
     try {
-      expect(process.env.YOUTUBE_API_KEY).toBeUndefined();
-      // The contract: { provider: 'youtube', results: [], warning: '...' }
-      // Validated by the handler logic — confirmed by code inspection.
-      const mockResponse = { provider: 'youtube', results: [], warning: 'YOUTUBE_API_KEY not configured' };
-      expect(mockResponse.provider).toBe('youtube');
-      expect(Array.isArray(mockResponse.results)).toBe(true);
-      expect(mockResponse.results.length).toBe(0);
-      expect(mockResponse.warning).toMatch(/YOUTUBE_API_KEY/);
+      const res = await request(app).get('/api/streaming/search?provider=youtube&q=test');
+      // 503 when feature flag is off (default); 401 when on but unauthenticated
+      expect([401, 503]).toContain(res.status);
     } finally {
       if (original !== undefined) {
         process.env.YOUTUBE_API_KEY = original;

@@ -33,6 +33,8 @@ pool.on('connect', () => {
 });
 
 pool.on('error', (err) => {
+  // Silently ignore expected teardown errors (e.g. Postgres terminated by CI/test runner)
+  if (err.code === '57P01') return;
   console.error('[Database] Unexpected error on idle client', err);
 });
 

@@ -1172,6 +1172,7 @@ describe('WebSocket late-join hydration — OFFICIAL_APP_SYNC', () => {
     const WebSocket = require('ws');
     let partyCode = null;
     let resolved = false;
+    let guestWs = null;
 
     // Step 1: Host creates party
     const hostWs = new WebSocket(wsUrl);
@@ -1201,7 +1202,7 @@ describe('WebSocket late-join hydration — OFFICIAL_APP_SYNC', () => {
         }
 
         // Step 2: Guest joins after track is selected
-        const guestWs = new WebSocket(wsUrl);
+        guestWs = new WebSocket(wsUrl);
         guestWs.once('open', () => {
           guestWs.send(JSON.stringify({ t: 'JOIN', code: partyCode, name: 'LateGuest' }));
         });
@@ -1235,6 +1236,7 @@ describe('WebSocket late-join hydration — OFFICIAL_APP_SYNC', () => {
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
+        if (guestWs) guestWs.close();
         hostWs.close();
         done(new Error('Timeout: guest did not receive TRACK_SELECTED on late join'));
       }
@@ -1246,6 +1248,7 @@ describe('WebSocket late-join hydration — OFFICIAL_APP_SYNC', () => {
     let partyCode = null;
     let resolved = false;
     let receivedTrackSelected = false;
+    let guestWs = null;
 
     const hostWs = new WebSocket(wsUrl);
     hostWs.once('open', () => {
@@ -1259,7 +1262,7 @@ describe('WebSocket late-join hydration — OFFICIAL_APP_SYNC', () => {
       if (msg.t === 'CREATED') {
         partyCode = msg.code;
 
-        const guestWs = new WebSocket(wsUrl);
+        guestWs = new WebSocket(wsUrl);
         guestWs.once('open', () => {
           guestWs.send(JSON.stringify({ t: 'JOIN', code: partyCode, name: 'EarlyGuest' }));
         });
@@ -1296,6 +1299,7 @@ describe('WebSocket late-join hydration — OFFICIAL_APP_SYNC', () => {
     setTimeout(() => {
       if (!resolved) {
         resolved = true;
+        if (guestWs) guestWs.close();
         hostWs.close();
         done(new Error('Timeout waiting for guest join confirmation'));
       }
