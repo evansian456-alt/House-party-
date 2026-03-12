@@ -59,6 +59,13 @@ test.describe('Landing page', () => {
     // Should mention £ (GBP) not $ (USD)
     expect(bodyText).toContain('£');
   });
+
+  test('landing page does not show Invite Friends banner', async ({ page }) => {
+    await page.goto(BASE);
+    await expect(page.locator('#viewLanding')).toBeVisible();
+    // The referral promo banner must not appear on the landing page
+    await expect(page.locator('#referralLandingBanner')).not.toBeAttached();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -273,17 +280,9 @@ test.describe('Authenticated home', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// INFORMATION ARCHITECTURE — Landing page must not show account actions
+// INFORMATION ARCHITECTURE — Authenticated home ordering
 // ─────────────────────────────────────────────────────────────────
 test.describe('Landing page information architecture', () => {
-  test('landing page does not show referral/invite banner to logged-out users', async ({ page }) => {
-    await page.goto(BASE);
-    await expect(page.locator('#viewLanding')).toBeVisible();
-    // The referral/invite banner must not be present on the landing page
-    const banner = page.locator('#referralLandingBanner');
-    await expect(banner).not.toBeAttached();
-  });
-
   test('authenticated home shows create/join party buttons before secondary tiles', async ({ page, request }) => {
     const u = makeUser('iaorder');
     await signup(request, u);
