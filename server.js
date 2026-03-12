@@ -4084,44 +4084,44 @@ app.get("/api/party-state", async (req, res) => {
     console.log(`[HTTP] Party state: ${code}, status: ${status}, track: ${currentTrack?.filename || currentTrack?.title || 'none'}, queue length: ${queue.length}`);
     
     // Return enhanced party state with playback info
-    // Wrapped in "party" object for backward compatibility with tests
+    // Return flat fields for test compatibility
+    const tierInfo = {
+      tier: partyData.tier || null,
+      partyPassExpiresAt: partyData.partyPassExpiresAt || null,
+      maxPhones: partyData.maxPhones || null
+    };
+    const currentTrackInfo = currentTrack ? {
+      trackId: currentTrack.trackId,
+      url: currentTrack.url || currentTrack.trackUrl,
+      filename: currentTrack.filename || currentTrack.title,
+      title: currentTrack.title,
+      durationMs: currentTrack.durationMs,
+      startAtServerMs: currentTrack.startAtServerMs,
+      startPosition: currentTrack.startPosition || currentTrack.startPositionSec,
+      startPositionSec: currentTrack.startPositionSec || currentTrack.startPosition,
+      status: currentTrack.status || 'playing',
+      pausedPositionSec: currentTrack.pausedPositionSec,
+      pausedAtServerMs: currentTrack.pausedAtServerMs
+    } : null;
     res.json({
       exists: true,
-      party: {
-        code: code,
-        status,
-        expiresAt: partyData.expiresAt || (partyData.createdAt + PARTY_TTL_MS),
-        timeRemainingMs,
-        guestCount: partyData.guestCount || 0,
-        guests: partyData.guests || [],
-        chatMode: partyData.chatMode || "OPEN",
-        createdAt: partyData.createdAt,
-        serverTime: now,
-        // Tier information (from backend entitlement validation)
-        tierInfo: {
-          tier: partyData.tier || null,
-          partyPassExpiresAt: partyData.partyPassExpiresAt || null,
-          maxPhones: partyData.maxPhones || null
-        },
-        // Playback state
-        currentTrack: currentTrack ? {
-          trackId: currentTrack.trackId,
-          url: currentTrack.url || currentTrack.trackUrl,
-          filename: currentTrack.filename || currentTrack.title,
-          title: currentTrack.title,
-          durationMs: currentTrack.durationMs,
-          startAtServerMs: currentTrack.startAtServerMs,
-          startPosition: currentTrack.startPosition || currentTrack.startPositionSec,
-          startPositionSec: currentTrack.startPositionSec || currentTrack.startPosition,
-          status: currentTrack.status || 'playing',
-          pausedPositionSec: currentTrack.pausedPositionSec,
-          pausedAtServerMs: currentTrack.pausedAtServerMs
-        } : null,
-        // Queue
-        queue: queue,
-        // DJ auto-messages
-        djMessages: djMessages
-      }
+      partyCode: code,
+      status,
+      expiresAt: partyData.expiresAt || (partyData.createdAt + PARTY_TTL_MS),
+      timeRemainingMs,
+      guestCount: partyData.guestCount || 0,
+      guests: partyData.guests || [],
+      chatMode: partyData.chatMode || "OPEN",
+      createdAt: partyData.createdAt,
+      serverTime: now,
+      // Tier information (from backend entitlement validation)
+      tierInfo,
+      // Playback state
+      currentTrack: currentTrackInfo,
+      // Queue
+      queue: queue,
+      // DJ auto-messages
+      djMessages: djMessages
     });
     
   } catch (error) {
