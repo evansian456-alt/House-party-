@@ -344,7 +344,7 @@ describe('/api/streaming/search (YouTube)', () => {
     expect([401, 503]).toContain(res.status);
   });
 
-  it('returns provider:youtube and results array when YOUTUBE_API_KEY is absent (no-op mode)', async () => {
+  it('requires authentication even when YOUTUBE_API_KEY is absent', async () => {
     // When YOUTUBE_API_KEY is absent the endpoint still requires auth first.
     // Verify auth guard runs regardless of API key presence.
     const original = process.env.YOUTUBE_API_KEY;

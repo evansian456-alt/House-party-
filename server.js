@@ -136,6 +136,7 @@ const DEBUG_MODE = process.env.DEBUG === 'true' || process.env.NODE_ENV === 'dev
 const ENABLE_PUBSUB = process.env.ENABLE_PUBSUB !== 'false'; // Default ON
 const ENABLE_REACTION_HISTORY = process.env.ENABLE_REACTION_HISTORY !== 'false'; // Default ON
 const STREAMING_PARTY_ENABLED = process.env.STREAMING_PARTY_ENABLED === 'true'; // Default OFF — must be explicitly enabled
+const YOUTUBE_API_TIMEOUT_MS = 10000; // 10 second timeout for YouTube Data API requests
 
 /**
  * Returns true if the Streaming Party feature flag is enabled.
@@ -5848,7 +5849,7 @@ app.get('/api/streaming/search', apiLimiter, requireStreamingEnabled, authMiddle
           resp.on('error', reject);
         });
         req.on('error', reject);
-        req.setTimeout(10000, () => {
+        req.setTimeout(YOUTUBE_API_TIMEOUT_MS, () => {
           req.destroy(new Error('Request to YouTube API timed out'));
         });
       });
