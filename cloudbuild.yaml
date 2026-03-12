@@ -1,6 +1,7 @@
+logsBucket: gs://house-party-1772069988_cloudbuild
+
 options:
   logging: CLOUD_LOGGING_ONLY
-  defaultLogsBucketBehavior: REGIONAL_USER_OWNED_BUCKET
 
 steps:
   - name: 'gcr.io/cloud-builders/docker'
