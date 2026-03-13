@@ -1352,6 +1352,7 @@
               <span class="playback-state-text" id="guestPlaybackStateText">Waiting</span>
             </div>
           </div>
+          <button class="btn-report-copyright hidden" id="btnGuestReportCopyright" onclick="openCopyrightReportModal()" title="Report copyright issue">⚑ Report Copyright</button>
         </div>
       </div>
 
@@ -1981,7 +1982,31 @@
     </div>
   </div>
 
-  <!-- DJ Messages Container (global overlay) -->
+  <!-- Copyright Report Modal -->
+  <div class="modal hidden" id="modalCopyrightReport">
+    <div class="modalCard" style="max-width:480px;text-align:left;">
+      <h3>⚑ Report Copyright Issue</h3>
+      <p class="muted" style="margin-bottom:1rem;">Report a track that you believe infringes copyright. All reports are reviewed by our moderation team.</p>
+      <div style="margin-bottom:1rem;">
+        <label for="copyrightReportReason" style="display:block;font-weight:600;margin-bottom:0.4rem;">Reason <span style="color:#e74c3c;">*</span></label>
+        <select id="copyrightReportReason" class="input" style="width:100%;">
+          <option value="">Select a reason...</option>
+          <option value="copyright_infringement">Copyright infringement</option>
+          <option value="unauthorized_upload">Unauthorized upload</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div style="margin-bottom:1.25rem;">
+        <label for="copyrightReportDescription" style="display:block;font-weight:600;margin-bottom:0.4rem;">Additional details (optional)</label>
+        <textarea id="copyrightReportDescription" class="input" rows="3" maxlength="500" placeholder="Provide any additional context about the copyright issue..." style="width:100%;resize:vertical;"></textarea>
+      </div>
+      <div class="row gap">
+        <button class="btn" id="btnCopyrightReportCancel" onclick="closeCopyrightReportModal()">Cancel</button>
+        <button class="btn primary" id="btnCopyrightReportSubmit" onclick="submitCopyrightReport()">Submit Report</button>
+      </div>
+      <p class="tiny muted" style="margin-top:0.75rem;">Reports are anonymous. You can also contact <a href="mailto:copyright@phone-party.com">copyright@phone-party.com</a> directly.</p>
+    </div>
+  </div>
   <div id="djMessagesContainer"></div>
 
   <!-- Authentication Views -->
@@ -2959,6 +2984,14 @@
           <li>Streaming Party features are available for Party Pass and Pro subscribers only.</li>
           <li>Phone Party is not affiliated with YouTube, Spotify, or SoundCloud.</li>
         </ul>
+
+        <h3>10. User Uploaded Content and Copyright</h3>
+        <p>Users may only upload or share content that they own or have the legal right to distribute.</p>
+        <p>By uploading or sharing any music, audio, or media through Phone Party, the user confirms that they have the necessary rights or permissions to do so.</p>
+        <p>Phone Party does not actively review all uploaded content and operates as a platform that allows users to share and synchronize media.</p>
+        <p>If any content is believed to infringe copyright, it may be reported using the in-app reporting tools or by contacting <a href="mailto:copyright@phone-party.com">copyright@phone-party.com</a>.</p>
+        <p>Phone Party will review copyright complaints and may remove or disable access to content that violates copyright laws.</p>
+        <p>Users who repeatedly upload infringing content may have their accounts suspended or terminated.</p>
       </div>
       <div class="auth-links" style="margin-top:1.5rem">
         <a href="#" class="link-to-privacy">Privacy Policy</a>

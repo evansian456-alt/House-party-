@@ -7112,6 +7112,194 @@ app.post('/api/iap/google/verify', apiLimiter, authMiddleware.requireAuth, async
 });
 
 // ============================================================================
+// COPYRIGHT REPORTING
+// ============================================================================
+
+const COPYRIGHT_REPORT_THRESHOLD = 3; // Number of reports before auto-hiding a track
+
+/**
+ * POST /api/report-copyright
+ * Allows any user (authenticated or not) to submit a copyright infringement report for a track.
+ */
+app.post('/api/report-copyright', rateLimit({ windowMs: 60000, max: 10, skip: shouldBypassRateLimit }), authMiddleware.optionalAuth, async (req, res) => {
+  const { trackId, partyId, reason, description, timestamp } = req.body || {};
+
+  if (!trackId || typeof trackId !== 'string' || trackId.trim() === '') {
+    return res.status(400).json({ error: 'trackId is required' });
+  }
+  if (!partyId || typeof partyId !== 'string' || partyId.trim() === '') {
+    return res.status(400).json({ error: 'partyId is required' });
+  }
+  const validReasons = ['copyright_infringement', 'unauthorized_upload', 'other'];
+  if (!reason || !validReasons.includes(reason)) {
+    return res.status(400).json({ error: 'reason must be one of: ' + validReasons.join(', ') });
+  }
+
+  const reporterUserId = (req.user && req.user.userId) ? req.user.userId : null;
+  const safeDescription = description && typeof description === 'string' ? description.slice(0, 500) : null;
+
+  try {
+    const result = await db.query(
+      `INSERT INTO copyright_reports (track_id, party_id, reporter_user_id, reason, description)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, created_at`,
+      [trackId.trim(), partyId.trim(), reporterUserId, reason, safeDescription]
+    );
+
+    const reportId = result.rows[0].id;
+
+    // Check if this track has hit the report threshold — auto-hide from party
+    const countResult = await db.query(
+      `SELECT COUNT(*) AS cnt FROM copyright_reports WHERE track_id = $1 AND status = 'pending'`,
+      [trackId.trim()]
+    );
+    const reportCount = parseInt(countResult.rows[0].cnt, 10);
+
+    if (reportCount >= COPYRIGHT_REPORT_THRESHOLD) {
+      // Flag track in Redis party state if the party is active
+      try {
+        const partyData = await loadPartyState(partyId.trim());
+        if (partyData) {
+          if (!partyData.hiddenTracks) partyData.hiddenTracks = [];
+          if (!partyData.hiddenTracks.includes(trackId.trim())) {
+            partyData.hiddenTracks.push(trackId.trim());
+            await savePartyState(partyId.trim(), partyData);
+            console.log(`[CopyrightReport] Track ${trackId} auto-hidden in party ${partyId} after ${reportCount} reports`);
+
+            // Notify party host via broadcast
+            broadcastToParty(partyId.trim(), {
+              t: 'COPYRIGHT_TRACK_HIDDEN',
+              trackId: trackId.trim(),
+              reason: 'Multiple copyright reports received. Track hidden pending review.'
+            });
+          }
+        }
+      } catch (partyErr) {
+        // Non-fatal: log but don't fail the report submission
+        console.warn('[CopyrightReport] Could not auto-hide track in party:', partyErr.message);
+      }
+    }
+
+    return res.status(201).json({ ok: true, reportId, message: 'Report submitted successfully' });
+  } catch (err) {
+    console.error('[CopyrightReport] DB error:', err.message);
+    return res.status(500).json({ error: 'Failed to submit report' });
+  }
+});
+
+/**
+ * GET /admin/copyright-reports
+ * Admin-only endpoint to list copyright reports with pagination and status filtering.
+ */
+app.get('/admin/copyright-reports', rateLimit({ windowMs: 60000, max: 60, skip: shouldBypassRateLimit }), authMiddleware.requireAdmin, async (req, res) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const offset = (page - 1) * limit;
+  const statusFilter = req.query.status || null;
+
+  const validStatuses = ['pending', 'reviewed', 'removed', 'dismissed'];
+  if (statusFilter && !validStatuses.includes(statusFilter)) {
+    return res.status(400).json({ error: 'Invalid status filter' });
+  }
+
+  try {
+    const countQuery = statusFilter
+      ? `SELECT COUNT(*) AS total FROM copyright_reports WHERE status = $1`
+      : `SELECT COUNT(*) AS total FROM copyright_reports`;
+    const countParams = statusFilter ? [statusFilter] : [];
+    const countResult = await db.query(countQuery, countParams);
+    const total = parseInt(countResult.rows[0].total, 10);
+
+    const dataQuery = statusFilter
+      ? `SELECT cr.id, cr.track_id, cr.party_id, cr.reporter_user_id, cr.reason, cr.description,
+                cr.created_at, cr.status,
+                u.email AS reporter_email, u.dj_name AS reporter_name
+         FROM copyright_reports cr
+         LEFT JOIN users u ON u.id = cr.reporter_user_id
+         WHERE cr.status = $1
+         ORDER BY cr.created_at DESC
+         LIMIT $2 OFFSET $3`
+      : `SELECT cr.id, cr.track_id, cr.party_id, cr.reporter_user_id, cr.reason, cr.description,
+                cr.created_at, cr.status,
+                u.email AS reporter_email, u.dj_name AS reporter_name
+         FROM copyright_reports cr
+         LEFT JOIN users u ON u.id = cr.reporter_user_id
+         ORDER BY cr.created_at DESC
+         LIMIT $1 OFFSET $2`;
+    const dataParams = statusFilter ? [statusFilter, limit, offset] : [limit, offset];
+    const dataResult = await db.query(dataQuery, dataParams);
+
+    return res.json({
+      ok: true,
+      reports: dataResult.rows,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    });
+  } catch (err) {
+    console.error('[Admin/CopyrightReports] DB error:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch reports' });
+  }
+});
+
+/**
+ * PATCH /admin/copyright-reports/:id
+ * Admin action: update status of a report (reviewed, removed, dismissed) and optionally remove the track.
+ */
+app.patch('/admin/copyright-reports/:id', rateLimit({ windowMs: 60000, max: 60, skip: shouldBypassRateLimit }), authMiddleware.requireAdmin, async (req, res) => {
+  const reportId = parseInt(req.params.id, 10);
+  if (isNaN(reportId)) {
+    return res.status(400).json({ error: 'Invalid report id' });
+  }
+
+  const { action } = req.body || {};
+  const validActions = ['reviewed', 'removed', 'dismissed'];
+  if (!action || !validActions.includes(action)) {
+    return res.status(400).json({ error: 'action must be one of: ' + validActions.join(', ') });
+  }
+
+  try {
+    const updateResult = await db.query(
+      `UPDATE copyright_reports SET status = $1 WHERE id = $2 RETURNING id, track_id, party_id`,
+      [action, reportId]
+    );
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    const { track_id: trackId, party_id: partyId } = updateResult.rows[0];
+
+    // If admin chose to remove, also remove the track from the party's queue in Redis
+    if (action === 'removed' && trackId && partyId) {
+      try {
+        const partyData = await loadPartyState(partyId);
+        if (partyData && partyData.queue) {
+          partyData.queue = partyData.queue.filter(t => t.trackId !== trackId);
+          if (!partyData.hiddenTracks) partyData.hiddenTracks = [];
+          if (!partyData.hiddenTracks.includes(trackId)) partyData.hiddenTracks.push(trackId);
+          await savePartyState(partyId, partyData);
+          broadcastToParty(partyId, {
+            t: 'QUEUE_UPDATED',
+            queue: partyData.queue,
+            reason: 'Track removed by moderator'
+          });
+        }
+      } catch (partyErr) {
+        console.warn('[Admin/CopyrightReports] Could not remove track from party:', partyErr.message);
+      }
+    }
+
+    return res.json({ ok: true, action, reportId });
+  } catch (err) {
+    console.error('[Admin/CopyrightReports] Update error:', err.message);
+    return res.status(500).json({ error: 'Failed to update report' });
+  }
+});
+
+// ============================================================================
+// END COPYRIGHT REPORTING
+// ============================================================================
+
+// ============================================================================
 // ADMIN helper
 // ============================================================================
 
