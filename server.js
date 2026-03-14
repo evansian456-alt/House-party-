@@ -7452,7 +7452,7 @@ app.get('/admin/copyright-reports', rateLimit({ windowMs: 60000, max: 60, skip: 
                 cr.created_at, cr.status,
                 u.email AS reporter_email, u.dj_name AS reporter_name
          FROM copyright_reports cr
-         LEFT JOIN users u ON u.id = cr.reporter_user_id
+         LEFT JOIN users u ON u.id::TEXT = cr.reporter_user_id
          WHERE cr.status = $1
          ORDER BY cr.created_at DESC
          LIMIT $2 OFFSET $3`
@@ -7460,7 +7460,7 @@ app.get('/admin/copyright-reports', rateLimit({ windowMs: 60000, max: 60, skip: 
                 cr.created_at, cr.status,
                 u.email AS reporter_email, u.dj_name AS reporter_name
          FROM copyright_reports cr
-         LEFT JOIN users u ON u.id = cr.reporter_user_id
+         LEFT JOIN users u ON u.id::TEXT = cr.reporter_user_id
          ORDER BY cr.created_at DESC
          LIMIT $1 OFFSET $2`;
     const dataParams = statusFilter ? [statusFilter, limit, offset] : [limit, offset];

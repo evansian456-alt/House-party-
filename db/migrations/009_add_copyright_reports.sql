@@ -1,11 +1,11 @@
--- Migration: 008_add_copyright_reports.sql
+-- Migration: 009_add_copyright_reports.sql
 -- Creates the copyright_reports table for tracking user-submitted copyright infringement reports.
 
 CREATE TABLE IF NOT EXISTS copyright_reports (
   id SERIAL PRIMARY KEY,
   track_id TEXT NOT NULL,
   party_id TEXT NOT NULL,
-  reporter_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  reporter_user_id TEXT,
   reason TEXT NOT NULL CHECK (reason IN ('copyright_infringement', 'unauthorized_upload', 'other')),
   description TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
