@@ -3892,14 +3892,13 @@ h2,h3{margin:0; font-weight:800}
   gap: 8px;
 }
 
-/* Shared baseline for ALL header icon-buttons — ensures every button in the
-   top nav bar is the same circular size so nothing looks off-center. */
+/* Shared baseline for icon-only header buttons — fixed 36×36px circles.
+   .btn-account is intentionally excluded because it displays text (djName). */
 .btn-parent-info,
 .btn-leaderboard,
 .btn-profile,
 .btn-upgrade,
 .btn-admin,
-.btn-account,
 .btn-logout {
   width: 36px;
   height: 36px;
@@ -3923,8 +3922,35 @@ h2,h3{margin:0; font-weight:800}
 .btn-profile:hover,
 .btn-upgrade:hover,
 .btn-admin:hover,
-.btn-account:hover,
 .btn-logout:hover {
+  background: rgba(90,169,255,0.12);
+  border-color: var(--brand);
+  transform: scale(1.05);
+}
+
+/* Account button: variable-width pill to accommodate djName text. */
+.btn-account {
+  max-width: 120px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(11,15,20,0.4);
+  color: var(--bright-white);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.btn-account:hover {
   background: rgba(90,169,255,0.12);
   border-color: var(--brand);
   transform: scale(1.05);
