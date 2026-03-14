@@ -113,6 +113,7 @@
 html{
   min-height:100%;
   overflow-y:auto;
+  overflow-x: hidden;
   overscroll-behavior:none;
 }
 body{
@@ -491,7 +492,9 @@ h2,h3{margin:0; font-weight:800}
   max-width: 800px;
   margin: 0 auto;
   padding: 20px;
-  overflow: hidden;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* DJ Hero Section */
@@ -1364,7 +1367,9 @@ h2,h3{margin:0; font-weight:800}
   position: relative;
   max-width: 900px;
   margin: 0 auto;
-  overflow: hidden;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 #viewHome h1 {
@@ -8034,5 +8039,118 @@ body {
   }
   #inviteShareButtons .btn {
     flex: 1 0 auto;
+  }
+}
+
+/* ============================================================
+   Scroll & Responsive layout improvements
+   All pages scroll naturally via the body scroll container.
+   These rules ensure content fits on every screen size.
+   ============================================================ */
+
+/* Ensure every direct-child section/card of .wrap can grow and never clips
+   overflow vertically. Both selectors use the > child combinator so only
+   immediate children of .wrap are targeted. */
+.wrap > section,
+.wrap > .card {
+  overflow-x: hidden;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Landing hero: reduce top/bottom padding on smaller viewports */
+@media (max-width: 768px) {
+  .landing-hero-new {
+    padding: 40px 16px;
+  }
+  .landing-subtitle-new {
+    margin-bottom: 36px;
+  }
+  .landing-cta-buttons {
+    margin-top: 32px;
+    margin-bottom: 32px;
+    padding: 0 8px;
+  }
+  .btn-landing-primary,
+  .btn-landing-secondary,
+  .btn-landing-addons {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Landing hero */
+  .landing-hero-new {
+    padding: 24px 12px;
+  }
+  .landing-title-new {
+    font-size: 32px;
+    letter-spacing: -0.5px;
+  }
+  .landing-subtitle-new {
+    font-size: 16px;
+    margin-bottom: 24px;
+  }
+  .landing-cta-buttons {
+    gap: 12px;
+    margin-top: 24px;
+    margin-bottom: 24px;
+  }
+  .btn-landing-primary,
+  .btn-landing-secondary {
+    padding: 16px 24px;
+    font-size: 18px;
+    border-radius: 14px;
+  }
+  .btn-landing-addons {
+    padding: 14px 24px;
+    font-size: 15px;
+  }
+  .landing-info-section {
+    gap: 16px;
+    margin: 24px 0;
+  }
+  .info-card {
+    padding: 1rem;
+  }
+  .info-icon {
+    font-size: 2rem;
+  }
+  .info-title {
+    font-size: 0.95rem;
+  }
+
+  /* Giant home buttons: stack cleanly on small screens */
+  .start-join-buttons {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin: 24px 0;
+  }
+  .btn-giant {
+    min-height: 160px;
+    padding: 28px 16px;
+  }
+  .btn-giant-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+  }
+  .btn-giant-text {
+    font-size: 20px;
+  }
+
+  /* Wrap padding: give breathing room on narrow phones while preserving
+     keyboard-safe bottom spacing */
+  main.wrap {
+    padding: 12px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Cards on narrow screens */
+  .card {
+    border-radius: 12px;
+  }
+  .neon-card {
+    padding: 20px 16px;
   }
 }
