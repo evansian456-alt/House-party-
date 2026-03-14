@@ -476,6 +476,35 @@ describe('setView() – nav visibility', () => {
   });
 });
 
+describe('btnHeaderLogin – click navigates to login view', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    global.isLoggedIn.mockReturnValue(false);
+    resetViews();
+    pushStateMock.mockClear();
+  });
+
+  test('clicking #btnHeaderLogin shows the login view', () => {
+    const btn = document.getElementById('btnHeaderLogin');
+    expect(btn).not.toBeNull();
+    btn.click();
+    expect(isVisible('viewLogin')).toBe(true);
+  });
+
+  test('clicking #btnHeaderLogin updates the URL hash to #login', () => {
+    const btn = document.getElementById('btnHeaderLogin');
+    btn.click();
+    expect(pushStateMock).toHaveBeenCalledWith(null, '', '#login');
+  });
+
+  test('clicking #btnHeaderLogin hides the landing view', () => {
+    document.getElementById('viewLanding').classList.remove('hidden');
+    const btn = document.getElementById('btnHeaderLogin');
+    btn.click();
+    expect(isVisible('viewLanding')).toBe(false);
+  });
+});
+
 // =============================================================================
 // initAuthFlow() — boot auth guard
 // Verifies that initAuthFlow() always consults the server and that stale
