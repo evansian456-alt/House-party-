@@ -4787,6 +4787,12 @@ h2,h3{margin:0; font-weight:800}
   padding: 20px;
 }
 
+/* Signup view: allow vertical scroll so the Create Account button is always reachable on small screens */
+#viewSignup {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .auth-form {
   margin: 24px 0;
 }
@@ -7947,6 +7953,22 @@ body {
 @media (max-width: 768px) {
   main.wrap {
     padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+}
+
+/* Signup page mobile fix: ensure Create Account button is always visible */
+@media (max-width: 480px) {
+  #viewSignup .auth-container {
+    padding-bottom: 80px;
+  }
+
+  #viewSignup #formSignup button[type="submit"] {
+    position: sticky;
+    bottom: 0;
+    background: var(--brand, #5aa9ff);
+    padding-top: 14px;
+    padding-bottom: 14px;
+    z-index: 1;
   }
 }
 
