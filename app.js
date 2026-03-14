@@ -3458,7 +3458,7 @@ function updateGuestTierUI() {
   console.log(`[Guest] Tier updated to: ${state.userTier}, Chat mode: ${state.chatMode}`);
 }
 
-function updateGuestNowPlaying(filename) {
+function updateGuestNowPlaying(filename, trackId) {
   const filenameEl = el("guestNowPlayingFilename");
   if (!filenameEl) return;
   
@@ -3466,6 +3466,18 @@ function updateGuestNowPlaying(filename) {
     filenameEl.textContent = filename;
   } else {
     filenameEl.textContent = "No track selected";
+  }
+
+  // Show/hide the Report Copyright button based on whether a track is playing
+  const reportBtn = el("btnGuestReportCopyright");
+  if (reportBtn) {
+    if (filename) {
+      reportBtn.classList.remove("hidden");
+      reportBtn.dataset.trackId = trackId || '';
+    } else {
+      reportBtn.classList.add("hidden");
+      reportBtn.dataset.trackId = '';
+    }
   }
   
   updateDebugState();
@@ -13428,6 +13440,106 @@ function buildStreamingPartyPlaybackState(trackDescriptor, startedAtPartyMs, sta
 // END STREAMING PARTY
 // ============================================================================
 
+// ============================================================================
+// COPYRIGHT REPORTING
+// ============================================================================
+
+// Tracks the trackId currently targeted for a copyright report
+let _copyrightReportTrackId = null;
+
+/**
+ * Opens the copyright report modal for the currently playing track (guest now-playing button).
+ */
+function openCopyrightReportModal() {
+  // Use the stored guest track ID from the now-playing state
+  const trackId = (el("btnGuestReportCopyright") && el("btnGuestReportCopyright").dataset.trackId) || state.guestTrackId || '';
+  openCopyrightReportModalForTrack(trackId);
+}
+
+/**
+ * Opens the copyright report modal targeting a specific track (queue item).
+ * @param {string} trackId
+ */
+function openCopyrightReportModalForTrack(trackId) {
+  _copyrightReportTrackId = trackId || null;
+
+  // Reset form
+  const reasonEl = el("copyrightReportReason");
+  const descEl = el("copyrightReportDescription");
+  if (reasonEl) reasonEl.value = '';
+  if (descEl) descEl.value = '';
+
+  const modal = el("modalCopyrightReport");
+  if (modal) modal.classList.remove("hidden");
+}
+
+/**
+ * Closes the copyright report modal without submitting.
+ */
+function closeCopyrightReportModal() {
+  const modal = el("modalCopyrightReport");
+  if (modal) modal.classList.add("hidden");
+  _copyrightReportTrackId = null;
+}
+
+/**
+ * Submits the copyright report to the server.
+ */
+async function submitCopyrightReport() {
+  const reasonEl = el("copyrightReportReason");
+  const descEl = el("copyrightReportDescription");
+  const submitBtn = el("btnCopyrightReportSubmit");
+
+  const reason = reasonEl ? reasonEl.value : '';
+  if (!reason) {
+    toast("Please select a reason for the report.");
+    return;
+  }
+
+  const description = descEl ? descEl.value.trim() : '';
+  const trackId = _copyrightReportTrackId || state.guestTrackId || null;
+  const partyId = state.partyCode || null;
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Submitting…";
+  }
+
+  try {
+    const response = await fetch('/api/report-copyright', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        trackId,
+        partyId,
+        reason,
+        description,
+        timestamp: new Date().toISOString()
+      })
+    });
+
+    if (response.ok) {
+      closeCopyrightReportModal();
+      toast("Copyright report submitted. Thank you.");
+    } else {
+      const data = await response.json().catch(() => ({}));
+      toast(data.error || "Failed to submit report. Please try again.");
+    }
+  } catch (err) {
+    console.error("[CopyrightReport] Submit error:", err);
+    toast("Network error. Please try again.");
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Submit Report";
+    }
+  }
+}
+
+// ============================================================================
+// END COPYRIGHT REPORTING
+// ============================================================================
+
 // Test/module exports (for Jest) — allows require() in tests; not reached in browsers.
 // In the browser this block is never reached (no `module` global).
 if (typeof module !== 'undefined' && module.exports) {
@@ -13466,5 +13578,9 @@ if (typeof module !== 'undefined' && module.exports) {
     ytGuestPause,
     updateYoutubePartySection,
     showYoutubeServiceView,
+    openCopyrightReportModal,
+    openCopyrightReportModalForTrack,
+    closeCopyrightReportModal,
+    submitCopyrightReport,
   };
 }

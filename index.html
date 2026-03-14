@@ -1340,6 +1340,7 @@
             </div>
             <button class="btn-report-small" style="margin-top:4px;" onclick="openReportTrackModal({title:document.getElementById('guestNowPlayingFilename')&&document.getElementById('guestNowPlayingFilename').textContent})">🚩 Report Track</button>
           </div>
+          <button class="btn-report-copyright hidden" id="btnGuestReportCopyright" onclick="openCopyrightReportModal()" title="Report copyright issue">⚑ Report Copyright</button>
         </div>
       </div>
 
@@ -1969,7 +1970,31 @@
     </div>
   </div>
 
-  <!-- DJ Messages Container (global overlay) -->
+  <!-- Copyright Report Modal -->
+  <div class="modal hidden" id="modalCopyrightReport">
+    <div class="modalCard" style="max-width:480px;text-align:left;">
+      <h3>⚑ Report Copyright Issue</h3>
+      <p class="muted" style="margin-bottom:1rem;">Report a track that you believe infringes copyright. All reports are reviewed by our moderation team.</p>
+      <div style="margin-bottom:1rem;">
+        <label for="copyrightReportReason" style="display:block;font-weight:600;margin-bottom:0.4rem;">Reason <span style="color:#e74c3c;">*</span></label>
+        <select id="copyrightReportReason" class="input" style="width:100%;">
+          <option value="">Select a reason...</option>
+          <option value="copyright_infringement">Copyright infringement</option>
+          <option value="unauthorized_upload">Unauthorized upload</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div style="margin-bottom:1.25rem;">
+        <label for="copyrightReportDescription" style="display:block;font-weight:600;margin-bottom:0.4rem;">Additional details (optional)</label>
+        <textarea id="copyrightReportDescription" class="input" rows="3" maxlength="500" placeholder="Provide any additional context about the copyright issue..." style="width:100%;resize:vertical;"></textarea>
+      </div>
+      <div class="row gap">
+        <button class="btn" id="btnCopyrightReportCancel" onclick="closeCopyrightReportModal()">Cancel</button>
+        <button class="btn primary" id="btnCopyrightReportSubmit" onclick="submitCopyrightReport()">Submit Report</button>
+      </div>
+      <p class="tiny muted" style="margin-top:0.75rem;">Reports are anonymous. You can also contact <a href="mailto:copyright@phone-party.com">copyright@phone-party.com</a> directly.</p>
+    </div>
+  </div>
   <div id="djMessagesContainer"></div>
 
   <!-- Authentication Views -->

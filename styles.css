@@ -4228,6 +4228,48 @@ h2,h3{margin:0; font-weight:800}
   font-style: italic;
 }
 
+/* Queue report copyright button */
+.queue-btn-report-copyright {
+  background: transparent;
+  border: 1px solid rgba(255, 120, 50, 0.4);
+  color: rgba(255, 140, 70, 0.85);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.queue-btn-report-copyright:hover {
+  background: rgba(255, 100, 30, 0.15);
+  color: #ff8844;
+  border-color: rgba(255, 120, 50, 0.7);
+}
+
+/* Now-playing report copyright button */
+.btn-report-copyright {
+  display: block;
+  width: 100%;
+  margin-top: 0.6rem;
+  padding: 0.4rem 0.75rem;
+  background: transparent;
+  border: 1px solid rgba(255, 120, 50, 0.4);
+  border-radius: 6px;
+  color: rgba(255, 150, 80, 0.9);
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-report-copyright:hover {
+  background: rgba(255, 100, 30, 0.15);
+  color: #ff8844;
+  border-color: rgba(255, 120, 50, 0.7);
+}
+
 /* Guest sync debug display */
 .guest-sync-debug {
   margin-top: 15px;
